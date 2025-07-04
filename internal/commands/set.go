@@ -1,10 +1,6 @@
 package commands
 
-import (
-	"fmt"
-
-	"github.com/thunderbottom/kiln/internal/core"
-)
+import "github.com/thunderbottom/kiln/internal/core"
 
 type SetCmd struct {
 	Key   string `arg:"" help:"Environment variable key"`
@@ -23,6 +19,7 @@ func (c *SetCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	fmt.Printf("Set %s in %s\n", c.Key, c.File)
+	globals.Logger.Info("environment variable set successfully", "key", c.Key, "file", c.File)
+
 	return nil
 }

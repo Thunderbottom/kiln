@@ -28,11 +28,9 @@ func (c *ExportCmd) Run(globals *Globals) error {
 
 	// Apply variable expansion if enabled
 	if c.Expand {
-		if globals.Verbose {
-			fmt.Fprintf(os.Stderr, "Applying variable expansion\n")
-			if c.AllowCommands {
-				fmt.Fprintf(os.Stderr, "Command substitution enabled\n")
-			}
+		globals.Logger.Debug("applying variable expansion")
+		if c.AllowCommands {
+			globals.Logger.Debug("command substitution enabled")
 		}
 		envVars = env.ExpandVariables(envVars, c.AllowCommands)
 	}

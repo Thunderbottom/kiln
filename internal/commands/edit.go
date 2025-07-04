@@ -75,7 +75,7 @@ func (c *EditCmd) editAndSave(plaintext []byte, globals *Globals) error {
 	}
 
 	if !afterStat.ModTime().After(beforeStat.ModTime()) {
-		fmt.Printf("No changes detected\n")
+		globals.Logger.Info("no changes detected")
 		return nil
 	}
 
@@ -119,6 +119,7 @@ func (c *EditCmd) saveChanges(tempFile string, globals *Globals) error {
 
 	cfg, _ := config.Load(globals.Config)
 	envFilePath := cfg.GetEnvFile(c.File)
-	fmt.Printf("Environment file updated: %s\n", envFilePath)
+	globals.Logger.Info("environment file updated", "path", envFilePath)
+
 	return nil
 }

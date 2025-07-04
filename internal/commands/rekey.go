@@ -46,9 +46,7 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 	envFilePath := cfg.GetEnvFile(c.File)
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		if globals.Verbose {
-			fmt.Printf("File %s doesn't exist, skipping\n", c.File)
-		}
+		globals.Logger.Debug("file does not exist, skipping", "filename", c.File)
 		return nil
 	}
 
@@ -80,6 +78,7 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 		return fmt.Errorf("failed to save with new keys: %w", err)
 	}
 
-	fmt.Printf("Successfully rekeyed %s with %d new recipients\n", c.File, len(c.AddRecipient))
+	globals.Logger.Info("successfully rekeyed file", "file", c.File, "recipients", len(c.AddRecipient))
+
 	return nil
 }

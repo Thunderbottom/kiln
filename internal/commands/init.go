@@ -22,61 +22,49 @@ func (c *InitCmd) Run(globals *Globals) error {
 	}
 
 	cfg := config.NewConfig()
+	return c.initEnv(cfg, globals)
+}
+
+func (c *InitCmd) initEnv(cfg *config.Config, globals *Globals) error {
 	if c.From != "" {
-		return c.initWithExistingKey(cfg, globals)
-	}
-	return c.initWithNewKeyPair(cfg, globals)
-}
+		if err := crypto.ValidatePublicKey(c.From); err != nil {
+			return fmt.Errorf("invalid public key: %w", err)
+		}
 
-func (c *InitCmd) initWithExistingKey(cfg *config.Config, globals *Globals) error {
-	if err := crypto.ValidatePublicKey(c.From); err != nil {
-		return fmt.Errorf("invalid public key: %w", err)
-	}
+		cfg.AddRecipient(c.From)
+		if err := cfg.Save(globals.Config); err != nil {
+			return fmt.Errorf("failed to save configuration: %w", err)
+		}
+	} else {
+		privateKey, publicKey, err := crypto.GenerateKeyPair()
+		if err != nil {
+			return fmt.Errorf("failed to generate key pair: %w", err)
+		}
 
-	cfg.AddRecipient(c.From)
-	if err := cfg.Save(globals.Config); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
+		cfg.AddRecipient(publicKey)
 
-	if err := c.createEmptyEnvFile(cfg.GetEnvFile("default"), cfg.Recipients); err != nil && globals.Verbose {
-		fmt.Printf("Warning: failed to create empty env file: %v\n", err)
-	}
+		keyDir := utils.ExpandPath(c.KeyOutput)
+		if err := os.MkdirAll(keyDir, 0700); err != nil {
+			return fmt.Errorf("failed to create key directory: %w", err)
+		}
 
-	fmt.Printf("Initialized kiln project with existing public key\n")
-	return nil
-}
+		privateKeyFile := filepath.Join(keyDir, "kiln.key")
+		if err := utils.SavePrivateKey(privateKey, privateKeyFile); err != nil {
+			return fmt.Errorf("failed to save private key: %w", err)
+		}
 
-func (c *InitCmd) initWithNewKeyPair(cfg *config.Config, globals *Globals) error {
-	privateKey, publicKey, err := crypto.GenerateKeyPair()
-	if err != nil {
-		return fmt.Errorf("failed to generate key pair: %w", err)
-	}
+		if err := cfg.Save(globals.Config); err != nil {
+			return fmt.Errorf("failed to save configuration: %w", err)
+		}
 
-	cfg.AddRecipient(publicKey)
-
-	keyDir := utils.ExpandPath(c.KeyOutput)
-	if err := os.MkdirAll(keyDir, 0700); err != nil {
-		return fmt.Errorf("failed to create key directory: %w", err)
+		globals.Logger.Info("generated new age key pair")
+		globals.Logger.Debug("generated age keys", "public key", publicKey, "private key", privateKeyFile)
 	}
 
-	privateKeyFile := filepath.Join(keyDir, "kiln.key")
-	if err := utils.SavePrivateKey(privateKey, privateKeyFile); err != nil {
-		return fmt.Errorf("failed to save private key: %w", err)
+	if err := c.createEmptyEnvFile(cfg.GetEnvFile("default"), cfg.Recipients); err != nil {
+		globals.Logger.Warn("failed to create empty env file", "error", err)
 	}
 
-	if err := cfg.Save(globals.Config); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
-
-	if err := c.createEmptyEnvFile(cfg.GetEnvFile("default"), cfg.Recipients); err != nil && globals.Verbose {
-		fmt.Printf("Warning: failed to create empty env file: %v\n", err)
-	}
-
-	fmt.Printf("Generated new age key pair\n")
-	if globals.Verbose {
-		fmt.Printf("Public key: %s\n", publicKey)
-		fmt.Printf("Private key file: %s\n", privateKeyFile)
-	}
 	return nil
 }
 

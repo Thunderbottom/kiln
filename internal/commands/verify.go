@@ -29,14 +29,14 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 	successful := 0
 	for _, fileName := range filesToVerify {
 		if err := core.ValidateEnvFile(globals.Config, fileName); err != nil {
-			fmt.Printf("  %s: Error - %v\n", fileName, err)
+			globals.Logger.Info(fmt.Sprintf("%v", err), "file", fileName)
 		} else {
-			fmt.Printf("  %s: OK\n", fileName)
+			globals.Logger.Info("ok", "file", fileName)
 			successful++
 		}
 	}
 
-	fmt.Printf("Verification: %d/%d files verified successfully\n", successful, len(filesToVerify))
+	globals.Logger.Info("verification complete", "success", successful, "total", len(filesToVerify))
 
 	if successful < len(filesToVerify) {
 		return fmt.Errorf("verification failed for %d file(s)", len(filesToVerify)-successful)

@@ -36,45 +36,29 @@ func (c *RunCmd) Run(globals *Globals) error {
 
 	// Apply variable expansion if enabled
 	if c.Expand {
-		if globals.Verbose {
-			fmt.Printf("Applying variable expansion\n")
-			if c.AllowCommands {
-				fmt.Printf("Command substitution enabled\n")
-			}
+		globals.Logger.Debug("applying variable expansion")
+		if c.AllowCommands {
+			globals.Logger.Debug("command substitution enabled")
 		}
 		envVars = env.ExpandVariables(envVars, c.AllowCommands)
 	}
 
 	if c.DryRun {
-		return c.showDryRun(envVars)
+		globals.Logger.Info("dry run mode enabled", "cmd", strings.Join(c.Command, " "),
+			"variables", len(envVars))
+
+		for key, value := range envVars {
+			displayValue := value
+			if len(displayValue) > 50 {
+				displayValue = displayValue[:47] + "..."
+			}
+			globals.Logger.Info("var", "key", key, "value", displayValue)
+		}
+
+		return nil
 	}
 
 	return c.executeCommand(envVars, globals)
-}
-
-func (c *RunCmd) showDryRun(envVars map[string]string) error {
-	fmt.Printf("Dry run mode - would execute: %s\n", strings.Join(c.Command, " "))
-
-	if c.Expand {
-		fmt.Printf("Variable expansion: enabled\n")
-		if c.AllowCommands {
-			fmt.Printf("Command substitution: enabled\n")
-		}
-	} else {
-		fmt.Printf("Variable expansion: disabled\n")
-	}
-
-	fmt.Printf("Environment variables (%d):\n", len(envVars))
-
-	for key, value := range envVars {
-		displayValue := value
-		if len(displayValue) > 50 {
-			displayValue = displayValue[:47] + "..."
-		}
-		fmt.Printf("  %s=%s\n", key, displayValue)
-	}
-
-	return nil
 }
 
 func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) error {
@@ -110,11 +94,9 @@ func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) err
 		cmd.Dir = c.WorkDir
 	}
 
-	if globals.Verbose {
-		fmt.Printf("Executing: %s\n", strings.Join(c.Command, " "))
-		if c.Expand {
-			fmt.Printf("Variable expansion applied to %d variables\n", len(envVars))
-		}
+	globals.Logger.Debug("executing command", "cmd", strings.Join(c.Command, " "))
+	if c.Expand {
+		globals.Logger.Debug("variable expansion applied", "count", len(envVars))
 	}
 
 	err := cmd.Run()

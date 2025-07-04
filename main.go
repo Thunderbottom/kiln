@@ -37,11 +37,7 @@ func main() {
 		kong.Vars{"version": fmt.Sprintf("%s (%s, built %s)", version, commit, date)},
 	)
 
-	// Create a globals struct that matches what commands expect
-	globals := &commands.Globals{
-		Config:  cli.Config,
-		Verbose: cli.Verbose,
-	}
+	globals := commands.NewGlobals(cli.Config, cli.Verbose)
 
 	err := ctx.Run(globals)
 	ctx.FatalIfErrorf(err)
