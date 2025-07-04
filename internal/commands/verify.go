@@ -22,7 +22,7 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 	}
 
 	ctx := context.Background()
-	privateKey, _, err := utils.LoadPrivateKey(ctx)
+	privateKey, err := utils.LoadPrivateKey(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -48,7 +48,7 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 
 	successful := 0
 	for _, fileName := range filesToVerify {
-		if err := c.verifyFile(cfg, fileName, ageManager, globals); err != nil {
+		if err := c.verifyFile(cfg, fileName, ageManager); err != nil {
 			fmt.Printf("  %s: Error - %v\n", fileName, err)
 		} else {
 			fmt.Printf("  %s: OK\n", fileName)
@@ -65,7 +65,7 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 	return nil
 }
 
-func (c *VerifyCmd) verifyFile(cfg *config.Config, fileName string, ageManager *crypto.AgeManager, globals *Globals) error {
+func (c *VerifyCmd) verifyFile(cfg *config.Config, fileName string, ageManager *crypto.AgeManager) error {
 	filePath := cfg.GetEnvFile(fileName)
 
 	if _, err := os.Stat(filePath); os.IsNotExist(err) {

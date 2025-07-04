@@ -19,12 +19,11 @@ const (
 
 // Config represents the kiln configuration
 type Config struct {
-	Version       int               `yaml:"version"`
-	Recipients    []string          `yaml:"recipients"`
-	Created       time.Time         `yaml:"created"`
-	Updated       time.Time         `yaml:"updated"`
-	Files         map[string]string `yaml:"files"`
-	SensitiveKeys []string          `yaml:"sensitive_keys,omitempty"`
+	Version    int               `yaml:"version"`
+	Recipients []string          `yaml:"recipients"`
+	Created    time.Time         `yaml:"created"`
+	Updated    time.Time         `yaml:"updated"`
+	Files      map[string]string `yaml:"files"`
 }
 
 // NewConfig creates a new configuration with defaults
@@ -37,10 +36,6 @@ func NewConfig() *Config {
 		Updated:    now,
 		Files: map[string]string{
 			"default": DefaultEnvFile,
-		},
-		SensitiveKeys: []string{
-			"key", "secret", "token", "password", "pass", "auth", "api",
-			"credential", "private", "cert", "tls", "salt",
 		},
 	}
 }
@@ -110,8 +105,8 @@ func (c *Config) Validate() error {
 
 	// Validate recipient format
 	for _, recipient := range c.Recipients {
-		if !strings.HasPrefix(recipient, "age1") || len(recipient) != 62 {
-			return fmt.Errorf("invalid recipient format: %s", recipient)
+		if strings.TrimSpace(recipient) == "" {
+			return fmt.Errorf("empty recipient key")
 		}
 	}
 
@@ -119,14 +114,6 @@ func (c *Config) Validate() error {
 	if c.Files == nil {
 		c.Files = map[string]string{
 			"default": DefaultEnvFile,
-		}
-	}
-
-	// Set default sensitive keys if empty
-	if c.SensitiveKeys == nil {
-		c.SensitiveKeys = []string{
-			"key", "secret", "token", "password", "pass", "auth", "api",
-			"credential", "private", "cert", "tls", "salt",
 		}
 	}
 
@@ -163,22 +150,6 @@ func (c *Config) GetEnvFile(name string) string {
 	}
 
 	return DefaultEnvFile
-}
-
-// ListEnvFiles returns all configured environment files
-func (c *Config) ListEnvFiles() map[string]string {
-	return c.Files
-}
-
-// IsSensitiveKey checks if a key should be considered sensitive
-func (c *Config) IsSensitiveKey(key string) bool {
-	keyLower := strings.ToLower(key)
-	for _, pattern := range c.SensitiveKeys {
-		if strings.Contains(keyLower, strings.ToLower(pattern)) {
-			return true
-		}
-	}
-	return false
 }
 
 // Exists checks if a config file exists

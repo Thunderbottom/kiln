@@ -2,6 +2,7 @@ package commands
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/thunderbottom/kiln/internal/config"
@@ -54,7 +55,7 @@ func (c *InitCmd) initWithNewKeyPair(cfg *config.Config, globals *Globals) error
 	cfg.AddRecipient(publicKey)
 
 	keyDir := utils.ExpandPath(c.KeyOutput)
-	if err := utils.EnsureDirectoryExists(keyDir); err != nil {
+	if err := os.MkdirAll(keyDir, 0700); err != nil {
 		return fmt.Errorf("failed to create key directory: %w", err)
 	}
 

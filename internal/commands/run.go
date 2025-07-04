@@ -9,10 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/crypto"
 	"github.com/thunderbottom/kiln/internal/env"
-	"github.com/thunderbottom/kiln/internal/utils"
 )
 
 type RunCmd struct {
@@ -31,7 +28,7 @@ func (c *RunCmd) Run(globals *Globals) error {
 		return fmt.Errorf("no command specified")
 	}
 
-	envVars, err := c.loadEnvVars(globals)
+	envVars, err := loadEnvVars(globals, c.File)
 	if err != nil {
 		return err
 	}
@@ -42,65 +39,17 @@ func (c *RunCmd) Run(globals *Globals) error {
 			fmt.Printf("Applying variable expansion\n")
 		}
 
-		// Validate variable references first
-		if err := env.ValidateVariableReferences(envVars); err != nil {
-			return fmt.Errorf("variable expansion validation failed: %w", err)
-		}
-
-		expandedVars, err := env.ExpandVariables(envVars, c.AllowCommands)
-		if err != nil {
-			return fmt.Errorf("variable expansion failed: %w", err)
-		}
-		envVars = expandedVars
+		envVars = env.ExpandVariables(envVars)
 	}
 
 	if c.DryRun {
-		return c.showDryRun(envVars, globals)
+		return c.showDryRun(envVars)
 	}
 
 	return c.executeCommand(envVars, globals)
 }
 
-func (c *RunCmd) loadEnvVars(globals *Globals) (map[string]string, error) {
-	cfg, err := config.Load(globals.Config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	envFilePath := cfg.GetEnvFile(c.File)
-	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("environment file not found: %s", envFilePath)
-	}
-
-	ctx := context.Background()
-	privateKey, _, err := utils.LoadPrivateKey(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
-	}
-
-	ageManager, err := crypto.NewAgeManager(cfg.Recipients)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup encryption: %w", err)
-	}
-
-	if err := ageManager.AddIdentity(privateKey); err != nil {
-		return nil, fmt.Errorf("failed to add identity: %w", err)
-	}
-
-	encrypted, err := os.ReadFile(envFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read environment file: %w", err)
-	}
-
-	plaintext, err := ageManager.Decrypt(encrypted)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt environment file: %w", err)
-	}
-
-	return env.ParseEnvFile(string(plaintext))
-}
-
-func (c *RunCmd) showDryRun(envVars map[string]string, globals *Globals) error {
+func (c *RunCmd) showDryRun(envVars map[string]string) error {
 	fmt.Printf("Dry run mode - would execute: %s\n", strings.Join(c.Command, " "))
 
 	if c.Expand {

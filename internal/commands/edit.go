@@ -26,7 +26,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 	envFilePath := cfg.GetEnvFile(c.File)
 
 	ctx := context.Background()
-	privateKey, _, err := utils.LoadPrivateKey(ctx)
+	privateKey, err := utils.LoadPrivateKey(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -45,7 +45,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	return c.editAndSave(plaintext, envFilePath, ageManager, globals)
+	return c.editAndSave(plaintext, envFilePath, ageManager)
 }
 
 func (c *EditCmd) loadOrCreateTemplate(envFilePath string, ageManager *crypto.AgeManager) ([]byte, error) {
@@ -65,28 +65,29 @@ DEBUG=false
 `), nil
 }
 
-func (c *EditCmd) editAndSave(plaintext []byte, envFilePath string, ageManager *crypto.AgeManager, globals *Globals) error {
-	tempFile, err := utils.CreateSecureTempFile("kiln-edit-*.env")
+func (c *EditCmd) editAndSave(plaintext []byte, envFilePath string, ageManager *crypto.AgeManager) error {
+	tempFile, err := os.CreateTemp("", "kiln-edit-*.env")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
-	defer utils.SecureDelete(tempFile)
+	defer os.Remove(tempFile.Name())
+	tempFile.Close()
 
-	if err := os.WriteFile(tempFile, plaintext, 0600); err != nil {
+	if err := os.WriteFile(tempFile.Name(), plaintext, 0600); err != nil {
 		return fmt.Errorf("failed to write to temporary file: %w", err)
 	}
 
-	beforeStat, err := os.Stat(tempFile)
+	beforeStat, err := os.Stat(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to stat temporary file: %w", err)
 	}
 
 	editorCmd := c.determineEditor()
-	if err := c.launchEditor(editorCmd, tempFile); err != nil {
+	if err := c.launchEditor(editorCmd, tempFile.Name()); err != nil {
 		return fmt.Errorf("editor failed: %w", err)
 	}
 
-	afterStat, err := os.Stat(tempFile)
+	afterStat, err := os.Stat(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to stat temporary file after editing: %w", err)
 	}
@@ -96,7 +97,7 @@ func (c *EditCmd) editAndSave(plaintext []byte, envFilePath string, ageManager *
 		return nil
 	}
 
-	return c.saveChanges(tempFile, envFilePath, ageManager, globals)
+	return c.saveChanges(tempFile.Name(), envFilePath, ageManager)
 }
 
 func (c *EditCmd) determineEditor() string {
@@ -117,11 +118,13 @@ func (c *EditCmd) launchEditor(editor, tempFile string) error {
 	return cmd.Run()
 }
 
-func (c *EditCmd) saveChanges(tempFile, envFilePath string, ageManager *crypto.AgeManager, globals *Globals) error {
+func (c *EditCmd) saveChanges(tempFile, envFilePath string, ageManager *crypto.AgeManager) error {
 	modifiedContent, err := os.ReadFile(tempFile)
 	if err != nil {
 		return fmt.Errorf("failed to read modified content: %w", err)
 	}
+
+	defer utils.WipeData(modifiedContent)
 
 	if _, err := env.ParseEnvFile(string(modifiedContent)); err != nil {
 		return fmt.Errorf("invalid environment file format: %w", err)

@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"filippo.io/age"
-	"github.com/thunderbottom/kiln/internal/errors"
 )
 
 // AgeManager handles Age encryption/decryption operations
@@ -32,7 +31,7 @@ func NewAgeManager(publicKeys []string) (*AgeManager, error) {
 
 		recipient, err := age.ParseX25519Recipient(key)
 		if err != nil {
-			return nil, errors.Wrapf(err, "invalid public key: %s", key)
+			return nil, fmt.Errorf("invalid public key %s: %w", key, err)
 		}
 		recipients = append(recipients, recipient)
 	}
@@ -55,7 +54,7 @@ func (am *AgeManager) AddIdentity(privateKey string) error {
 
 	identity, err := age.ParseX25519Identity(privateKey)
 	if err != nil {
-		return errors.Wrap(err, "invalid private key")
+		return fmt.Errorf("invalid private key: %w", err)
 	}
 
 	am.identities = append(am.identities, identity)
@@ -75,15 +74,15 @@ func (am *AgeManager) Encrypt(data []byte) ([]byte, error) {
 	var buf bytes.Buffer
 	w, err := age.Encrypt(&buf, am.recipients...)
 	if err != nil {
-		return nil, errors.New("crypto.Encrypt", err)
+		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
 
 	if _, err := w.Write(data); err != nil {
-		return nil, errors.New("crypto.Encrypt", err)
+		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
 
 	if err := w.Close(); err != nil {
-		return nil, errors.New("crypto.Encrypt", err)
+		return nil, fmt.Errorf("encryption failed: %w", err)
 	}
 
 	return buf.Bytes(), nil
@@ -101,12 +100,12 @@ func (am *AgeManager) Decrypt(data []byte) ([]byte, error) {
 
 	r, err := age.Decrypt(bytes.NewReader(data), am.identities...)
 	if err != nil {
-		return nil, errors.New("crypto.Decrypt", err)
+		return nil, fmt.Errorf("decryption failed: %w", err)
 	}
 
 	result, err := io.ReadAll(r)
 	if err != nil {
-		return nil, errors.New("crypto.Decrypt", err)
+		return nil, fmt.Errorf("decryption failed: %w", err)
 	}
 
 	return result, nil
@@ -116,7 +115,7 @@ func (am *AgeManager) Decrypt(data []byte) ([]byte, error) {
 func GenerateKeyPair() (privateKey, publicKey string, err error) {
 	identity, err := age.GenerateX25519Identity()
 	if err != nil {
-		return "", "", errors.New("crypto.GenerateKeyPair", err)
+		return "", "", fmt.Errorf("key generation failed: %w", err)
 	}
 
 	privateKey = identity.String()
@@ -142,7 +141,7 @@ func ValidatePublicKey(key string) error {
 
 	_, err := age.ParseX25519Recipient(key)
 	if err != nil {
-		return errors.Wrap(err, "invalid public key format")
+		return fmt.Errorf("invalid public key format: %w", err)
 	}
 
 	return nil
@@ -161,7 +160,7 @@ func ValidatePrivateKey(key string) error {
 
 	_, err := age.ParseX25519Identity(key)
 	if err != nil {
-		return errors.Wrap(err, "invalid private key format")
+		return fmt.Errorf("invalid private key format: %w", err)
 	}
 
 	return nil

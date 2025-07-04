@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,9 +10,6 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/crypto"
-	"github.com/thunderbottom/kiln/internal/env"
-	"github.com/thunderbottom/kiln/internal/utils"
 )
 
 type ExportCmd struct {
@@ -23,7 +19,7 @@ type ExportCmd struct {
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
-	envVars, err := c.loadEnvVars(globals)
+	envVars, err := loadEnvVars(globals, c.File)
 	if err != nil {
 		return err
 	}
@@ -43,54 +39,26 @@ func (c *ExportCmd) Run(globals *Globals) error {
 	}
 }
 
-func (c *ExportCmd) loadEnvVars(globals *Globals) (map[string]string, error) {
-	cfg, err := config.Load(globals.Config)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	envFilePath := cfg.GetEnvFile(c.File)
-	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
-		return nil, fmt.Errorf("environment file not found: %s", envFilePath)
-	}
-
-	ctx := context.Background()
-	privateKey, _, err := utils.LoadPrivateKey(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
-	}
-
-	ageManager, err := crypto.NewAgeManager(cfg.Recipients)
-	if err != nil {
-		return nil, fmt.Errorf("failed to setup encryption: %w", err)
-	}
-
-	if err := ageManager.AddIdentity(privateKey); err != nil {
-		return nil, fmt.Errorf("failed to add identity: %w", err)
-	}
-
-	encrypted, err := os.ReadFile(envFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("failed to read environment file: %w", err)
-	}
-
-	plaintext, err := ageManager.Decrypt(encrypted)
-	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt environment file: %w", err)
-	}
-
-	return env.ParseEnvFile(string(plaintext))
-}
-
 func (c *ExportCmd) processVars(envVars map[string]string, cfg *config.Config) map[string]string {
 	processed := make(map[string]string)
 	for key, value := range envVars {
-		if c.Mask && cfg != nil && cfg.IsSensitiveKey(key) {
+		if c.Mask && cfg != nil && c.isSensitiveKey(key) {
 			value = c.maskValue(value)
 		}
 		processed[key] = value
 	}
 	return processed
+}
+
+func (c *ExportCmd) isSensitiveKey(key string) bool {
+	keyLower := strings.ToLower(key)
+	sensitivePatterns := []string{"password", "secret", "token", "key", "auth", "api"}
+	for _, pattern := range sensitivePatterns {
+		if strings.Contains(keyLower, pattern) {
+			return true
+		}
+	}
+	return false
 }
 
 func (c *ExportCmd) maskValue(value string) string {

@@ -26,7 +26,7 @@ func (c *SetCmd) Run(globals *Globals) error {
 	envFilePath := cfg.GetEnvFile(c.File)
 
 	ctx := context.Background()
-	privateKey, _, err := utils.LoadPrivateKey(ctx)
+	privateKey, err := utils.LoadPrivateKey(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -74,6 +74,8 @@ func (c *SetCmd) loadExistingVars(envFilePath string, ageManager *crypto.AgeMana
 		if err != nil {
 			return nil, fmt.Errorf("failed to decrypt environment file: %w", err)
 		}
+
+		defer utils.WipeData(plaintext)
 
 		envVars, err = env.ParseEnvFile(string(plaintext))
 		if err != nil {

@@ -17,6 +17,10 @@ type RekeyCmd struct {
 }
 
 func (c *RekeyCmd) Run(globals *Globals) error {
+	if c.File == "" {
+		return fmt.Errorf("--file flag is required")
+	}
+
 	cfg, err := config.Load(globals.Config)
 	if err != nil {
 		return fmt.Errorf("failed to load configuration: %w", err)
@@ -35,12 +39,12 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("no new recipients to add")
 	}
 
-	return c.rekeyFiles(cfg, globals)
+	return c.rekeyFile(cfg, globals)
 }
 
-func (c *RekeyCmd) rekeyFiles(cfg *config.Config, globals *Globals) error {
+func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 	ctx := context.Background()
-	privateKey, _, err := utils.LoadPrivateKey(ctx)
+	privateKey, err := utils.LoadPrivateKey(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -50,31 +54,11 @@ func (c *RekeyCmd) rekeyFiles(cfg *config.Config, globals *Globals) error {
 		return fmt.Errorf("failed to setup new encryption: %w", err)
 	}
 
-	filesToRekey := []string{"default"}
-	if c.File != "" {
-		filesToRekey = []string{c.File}
-	}
-
-	for _, fileName := range filesToRekey {
-		if err := c.rekeyFile(cfg, fileName, privateKey, newManager, globals); err != nil {
-			return fmt.Errorf("failed to rekey file %s: %w", fileName, err)
-		}
-	}
-
-	if err := cfg.Save(globals.Config); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
-	}
-
-	fmt.Printf("Rekeyed %d file(s) with %d new recipient(s)\n", len(filesToRekey), len(c.AddRecipient))
-	return nil
-}
-
-func (c *RekeyCmd) rekeyFile(cfg *config.Config, fileName, privateKey string, newManager *crypto.AgeManager, globals *Globals) error {
-	envFilePath := cfg.GetEnvFile(fileName)
+	envFilePath := cfg.GetEnvFile(c.File)
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
 		if globals.Verbose {
-			fmt.Printf("File %s doesn't exist, skipping\n", fileName)
+			fmt.Printf("File %s doesn't exist, skipping\n", c.File)
 		}
 		return nil
 	}
