@@ -14,7 +14,7 @@ var (
 )
 
 type CLI struct {
-	Config  string `short:"c" help:"Configuration file path" default:".kiln.yaml"`
+	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml"`
 	Verbose bool   `short:"v" help:"Verbose output"`
 
 	Init    commands.InitCmd   `cmd:"" help:"Initialize new kiln project"`

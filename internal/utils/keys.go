@@ -168,11 +168,6 @@ func SavePrivateKey(privateKey, filename string) error {
 	return nil
 }
 
-// SecureDelete removes a file (simplified version)
-func SecureDelete(path string) error {
-	return os.Remove(path)
-}
-
 // SaveFile writes data to a file with secure permissions
 func SaveFile(filename string, data []byte) error {
 	dir := filepath.Dir(filename)

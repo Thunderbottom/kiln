@@ -6,34 +6,25 @@ import (
 	"path/filepath"
 	"slices"
 	"strings"
-	"time"
 
-	"gopkg.in/yaml.v3"
+	"github.com/BurntSushi/toml"
 )
 
 const (
-	DefaultConfigFile = ".kiln.yaml"
+	DefaultConfigFile = "kiln.toml"
 	DefaultEnvFile    = ".kiln.env"
-	ConfigVersion     = 1
 )
 
 // Config represents the kiln configuration
 type Config struct {
-	Version    int               `yaml:"version"`
-	Recipients []string          `yaml:"recipients"`
-	Created    time.Time         `yaml:"created"`
-	Updated    time.Time         `yaml:"updated"`
-	Files      map[string]string `yaml:"files"`
+	Recipients []string          `toml:"recipients"`
+	Files      map[string]string `toml:"files"`
 }
 
 // NewConfig creates a new configuration with defaults
 func NewConfig() *Config {
-	now := time.Now()
 	return &Config{
-		Version:    ConfigVersion,
 		Recipients: []string{},
-		Created:    now,
-		Updated:    now,
 		Files: map[string]string{
 			"default": DefaultEnvFile,
 		},
@@ -46,16 +37,11 @@ func Load(path string) (*Config, error) {
 		path = DefaultConfigFile
 	}
 
-	data, err := os.ReadFile(path)
-	if err != nil {
+	var config Config
+	if _, err := toml.DecodeFile(path, &config); err != nil {
 		if os.IsNotExist(err) {
 			return nil, fmt.Errorf("kiln configuration not found at %s", path)
 		}
-		return nil, fmt.Errorf("failed to read config: %v", err)
-	}
-
-	var config Config
-	if err := yaml.Unmarshal(data, &config); err != nil {
 		return nil, fmt.Errorf("failed to parse config: %v", err)
 	}
 
@@ -72,22 +58,25 @@ func (c *Config) Save(path string) error {
 		path = DefaultConfigFile
 	}
 
-	c.Updated = time.Now()
-
-	data, err := yaml.Marshal(c)
-	if err != nil {
-		return fmt.Errorf("failed to marshal config: %v", err)
-	}
-
-	// Create directory if needed
 	if dir := filepath.Dir(path); dir != "." {
 		if err := os.MkdirAll(dir, 0755); err != nil {
 			return fmt.Errorf("failed to create config directory: %v", err)
 		}
 	}
 
-	if err := os.WriteFile(path, data, 0600); err != nil {
-		return fmt.Errorf("failed to write config: %v", err)
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create config file: %v", err)
+	}
+	defer file.Close()
+
+	encoder := toml.NewEncoder(file)
+	if err := encoder.Encode(c); err != nil {
+		return fmt.Errorf("failed to encode config: %v", err)
+	}
+
+	if err := file.Chmod(0600); err != nil {
+		return fmt.Errorf("failed to set config file permissions: %v", err)
 	}
 
 	return nil
@@ -95,15 +84,10 @@ func (c *Config) Save(path string) error {
 
 // Validate checks if the configuration is valid
 func (c *Config) Validate() error {
-	if c.Version != ConfigVersion {
-		return fmt.Errorf("unsupported config version %d, expected %d", c.Version, ConfigVersion)
-	}
-
 	if len(c.Recipients) == 0 {
 		return fmt.Errorf("no recipients configured - run 'kiln init' or add recipients")
 	}
 
-	// Validate each recipient key format
 	for i, recipient := range c.Recipients {
 		recipient = strings.TrimSpace(recipient)
 		if recipient == "" {
@@ -119,7 +103,6 @@ func (c *Config) Validate() error {
 		}
 	}
 
-	// Validate file paths
 	for name, path := range c.Files {
 		if strings.TrimSpace(path) == "" {
 			return fmt.Errorf("file path for '%s' is empty", name)
@@ -190,7 +173,7 @@ func FindConfigFile() (string, error) {
 
 		parent := filepath.Dir(cwd)
 		if parent == cwd {
-			break // Reached root directory
+			break
 		}
 		cwd = parent
 	}

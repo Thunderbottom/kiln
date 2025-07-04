@@ -4,6 +4,7 @@ go 1.24.4
 
 require (
 	filippo.io/age v1.2.1
+	github.com/BurntSushi/toml v1.5.0
 	github.com/alecthomas/kong v1.12.0
 	github.com/lmittmann/tint v1.1.2
 	gopkg.in/yaml.v3 v3.0.1
