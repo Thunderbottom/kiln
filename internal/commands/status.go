@@ -26,7 +26,7 @@ func (c *StatusCmd) Run(globals *Globals) error {
 
 	for name := range cfg.Files {
 		if err := c.showFileStatus(globals, name); err != nil {
-			globals.Logger.Info(fmt.Sprintf("%v", err), "file", name)
+			globals.Logger.Error(fmt.Sprintf("%v", err), "file", name)
 		}
 	}
 	return nil
@@ -35,10 +35,9 @@ func (c *StatusCmd) Run(globals *Globals) error {
 func (c *StatusCmd) showFileStatus(globals *Globals, fileName string) error {
 	filePath, info, err := core.GetFileInfo(globals.Config, fileName)
 	if os.IsNotExist(err) {
-		globals.Logger.Info("file not found", "file", fileName, "path", filePath)
+		globals.Logger.Error("file not found", "file", fileName, "path", filePath)
 		return nil
 	} else if err != nil {
-		globals.Logger.Info(fmt.Sprintf("%v", err), "file", fileName, "path", filePath)
 		return err
 	}
 

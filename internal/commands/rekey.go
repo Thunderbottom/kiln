@@ -43,7 +43,10 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 }
 
 func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
-	envFilePath := cfg.GetEnvFile(c.File)
+	envFilePath, err := cfg.GetEnvFile(c.File)
+	if err != nil {
+		return err
+	}
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
 		globals.Logger.Debug("file does not exist, skipping", "filename", c.File)

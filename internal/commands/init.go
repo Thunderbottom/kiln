@@ -62,7 +62,12 @@ func (c *InitCmd) initEnv(cfg *config.Config, globals *Globals) error {
 		globals.Logger.Debug("generated age keys", "public key", publicKey, "private key", privateKeyFile)
 	}
 
-	if err := c.createEmptyEnvFile(cfg.GetEnvFile("default"), cfg.Recipients); err != nil {
+	file, err := cfg.GetEnvFile("default")
+	if err != nil {
+		return err
+	}
+
+	if err := c.createEmptyEnvFile(file, cfg.Recipients); err != nil {
 		globals.Logger.Warn("failed to create empty env file", "error", err)
 	}
 

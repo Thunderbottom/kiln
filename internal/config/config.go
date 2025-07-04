@@ -149,16 +149,21 @@ func (c *Config) RemoveRecipient(recipient string) bool {
 }
 
 // GetEnvFile returns the path for the specified environment file
-func (c *Config) GetEnvFile(name string) string {
+func (c *Config) GetEnvFile(name string) (string, error) {
 	if name == "" {
 		name = "default"
 	}
 
 	if file, exists := c.Files[name]; exists {
-		return file
+		return file, nil
 	}
 
-	return DefaultEnvFile
+	available := make([]string, 0, len(c.Files))
+	for fileName := range c.Files {
+		available = append(available, fileName)
+	}
+
+	return "", fmt.Errorf("file '%s' not found in configuration, available files: %v", name, available)
 }
 
 // Exists checks if a config file exists

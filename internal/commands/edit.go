@@ -120,7 +120,11 @@ func (c *EditCmd) saveChanges(tempFile string, globals *Globals) error {
 	}
 
 	cfg, _ := config.Load(globals.Config)
-	envFilePath := cfg.GetEnvFile(c.File)
+	envFilePath, err := cfg.GetEnvFile(c.File)
+	if err != nil {
+		return err
+	}
+
 	globals.Logger.Info("environment file updated", "path", envFilePath)
 
 	return nil

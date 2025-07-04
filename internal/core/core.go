@@ -39,7 +39,10 @@ func LoadEnvVars(ctx context.Context, configPath, fileName string) (map[string]s
 	default:
 	}
 
-	envFilePath := cfg.GetEnvFile(fileName)
+	envFilePath, err := cfg.GetEnvFile(fileName)
+	if err != nil {
+		return nil, err
+	}
 	if err := CheckFileExists(envFilePath); err != nil {
 		return nil, err
 	}
@@ -59,7 +62,10 @@ func LoadOrCreateEnvVars(ctx context.Context, configPath, fileName string) (map[
 		return nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
 	}
 
-	envFilePath := cfg.GetEnvFile(fileName)
+	envFilePath, err := cfg.GetEnvFile(fileName)
+	if err != nil {
+		return nil, err
+	}
 	if !utils.FileExists(envFilePath) {
 		return make(map[string]string), nil
 	}
@@ -86,7 +92,11 @@ func SaveEnvVars(ctx context.Context, configPath, fileName string, envVars map[s
 		return fmt.Errorf("%s: %w", ErrEncrypt, err)
 	}
 
-	envFilePath := cfg.GetEnvFile(fileName)
+	envFilePath, err := cfg.GetEnvFile(fileName)
+	if err != nil {
+		return err
+	}
+
 	if err := utils.SaveFile(envFilePath, encrypted); err != nil {
 		return fmt.Errorf("%s: %w", ErrSaveFile, err)
 	}
@@ -146,7 +156,11 @@ func GetFileInfo(configPath, fileName string) (string, os.FileInfo, error) {
 		return "", nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
 	}
 
-	filePath := cfg.GetEnvFile(fileName)
+	filePath, err := cfg.GetEnvFile(fileName)
+	if err != nil {
+		return "", nil, err
+	}
+
 	info, err := os.Stat(filePath)
 	return filePath, info, err
 }
