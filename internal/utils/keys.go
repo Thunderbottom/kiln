@@ -175,16 +175,52 @@ func SecureDelete(path string) error {
 
 // SaveFile writes data to a file with secure permissions
 func SaveFile(filename string, data []byte) error {
-	// Create directory if needed
-	if dir := filepath.Dir(filename); dir != "." {
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
+	dir := filepath.Dir(filename)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return fmt.Errorf("failed to create directory: %w", err)
 	}
 
-	// Write file with secure permissions
-	if err := os.WriteFile(filename, data, 0600); err != nil {
-		return fmt.Errorf("failed to save file: %w", err)
+	// Create temporary file in the same directory
+	tmpFile, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(filename)+"-")
+	if err != nil {
+		return fmt.Errorf("failed to create temporary file: %w", err)
+	}
+	tmpPath := tmpFile.Name()
+
+	// Cleanup on failure
+	defer func() {
+		if tmpFile != nil {
+			tmpFile.Close()
+			os.Remove(tmpPath)
+		}
+	}()
+
+	// Set permissions before writing
+	if err := tmpFile.Chmod(0600); err != nil {
+		return fmt.Errorf("failed to set file permissions: %w", err)
+	}
+
+	// Write data
+	if _, err := tmpFile.Write(data); err != nil {
+		return fmt.Errorf("failed to write data: %w", err)
+	}
+
+	// Sync to disk
+	if err := tmpFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %w", err)
+	}
+
+	// Close the file
+	if err := tmpFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %w", err)
+	}
+	// Prevent cleanup
+	tmpFile = nil
+
+	// Atomic rename
+	if err := os.Rename(tmpPath, filename); err != nil {
+		os.Remove(tmpPath)
+		return fmt.Errorf("failed to rename temporary file: %w", err)
 	}
 
 	return nil

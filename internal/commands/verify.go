@@ -36,7 +36,7 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("failed to add identity: %w", err)
 	}
 
-	filesToVerify := []string{"default"}
+	var filesToVerify []string
 	if c.File != "" {
 		filesToVerify = []string{c.File}
 	} else {

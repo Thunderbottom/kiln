@@ -100,20 +100,29 @@ func (c *Config) Validate() error {
 	}
 
 	if len(c.Recipients) == 0 {
-		return fmt.Errorf("no recipients configured")
+		return fmt.Errorf("no recipients configured - run 'kiln init' or add recipients")
 	}
 
-	// Validate recipient format
-	for _, recipient := range c.Recipients {
-		if strings.TrimSpace(recipient) == "" {
-			return fmt.Errorf("empty recipient key")
+	// Validate each recipient key format
+	for i, recipient := range c.Recipients {
+		recipient = strings.TrimSpace(recipient)
+		if recipient == "" {
+			return fmt.Errorf("recipient %d is empty", i+1)
+		}
+
+		if !strings.HasPrefix(recipient, "age1") {
+			return fmt.Errorf("recipient %d: invalid format (must start with 'age1')", i+1)
+		}
+
+		if len(recipient) != 62 {
+			return fmt.Errorf("recipient %d: invalid length", i+1)
 		}
 	}
 
-	// Set default files if empty
-	if c.Files == nil {
-		c.Files = map[string]string{
-			"default": DefaultEnvFile,
+	// Validate file paths
+	for name, path := range c.Files {
+		if strings.TrimSpace(path) == "" {
+			return fmt.Errorf("file path for '%s' is empty", name)
 		}
 	}
 
