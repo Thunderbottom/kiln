@@ -1,13 +1,12 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 
 	"github.com/thunderbottom/kiln/internal/config"
+	"github.com/thunderbottom/kiln/internal/core"
 	"github.com/thunderbottom/kiln/internal/crypto"
-	"github.com/thunderbottom/kiln/internal/utils"
 )
 
 type RekeyCmd struct {
@@ -28,6 +27,7 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 
 	originalCount := len(cfg.Recipients)
 
+	// Validate and add new recipients
 	for _, recipient := range c.AddRecipient {
 		if err := crypto.ValidatePublicKey(recipient); err != nil {
 			return fmt.Errorf("invalid recipient key %s: %w", recipient, err)
@@ -43,17 +43,6 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 }
 
 func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
-	ctx := context.Background()
-	privateKey, err := utils.LoadPrivateKey(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load private key: %w", err)
-	}
-
-	newManager, err := crypto.NewAgeManager(cfg.Recipients)
-	if err != nil {
-		return fmt.Errorf("failed to setup new encryption: %w", err)
-	}
-
 	envFilePath := cfg.GetEnvFile(c.File)
 
 	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
@@ -63,30 +52,34 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 		return nil
 	}
 
+	// Load existing environment variables using old recipients
 	oldRecipients := cfg.Recipients[:len(cfg.Recipients)-len(c.AddRecipient)]
-	oldManager, err := crypto.NewAgeManager(oldRecipients)
+	oldCfg := *cfg
+	oldCfg.Recipients = oldRecipients
+
+	// Save old config temporarily to load with old recipients
+	tempConfig := globals.Config + ".tmp"
+	if err := oldCfg.Save(tempConfig); err != nil {
+		return fmt.Errorf("failed to save temporary config: %w", err)
+	}
+	defer os.Remove(tempConfig)
+
+	// Load environment variables with old configuration
+	envVars, err := core.LoadEnvVars(tempConfig, c.File)
 	if err != nil {
-		return fmt.Errorf("failed to setup old encryption: %w", err)
+		return fmt.Errorf("failed to load with old keys: %w", err)
 	}
 
-	if err := oldManager.AddIdentity(privateKey); err != nil {
-		return fmt.Errorf("failed to add identity: %w", err)
+	// Save configuration with new recipients
+	if err := cfg.Save(globals.Config); err != nil {
+		return fmt.Errorf("failed to save updated config: %w", err)
 	}
 
-	encrypted, err := os.ReadFile(envFilePath)
-	if err != nil {
-		return fmt.Errorf("failed to read file: %w", err)
+	// Save environment variables with new recipients
+	if err := core.SaveEnvVars(globals.Config, c.File, envVars); err != nil {
+		return fmt.Errorf("failed to save with new keys: %w", err)
 	}
 
-	plaintext, err := oldManager.Decrypt(encrypted)
-	if err != nil {
-		return fmt.Errorf("failed to decrypt with old keys: %w", err)
-	}
-
-	newEncrypted, err := newManager.Encrypt(plaintext)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt with new keys: %w", err)
-	}
-
-	return utils.SaveFile(envFilePath, newEncrypted)
+	fmt.Printf("Successfully rekeyed %s with %d new recipients\n", c.File, len(c.AddRecipient))
+	return nil
 }

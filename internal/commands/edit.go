@@ -1,13 +1,12 @@
 package commands
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"os/exec"
 
 	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/crypto"
+	"github.com/thunderbottom/kiln/internal/core"
 	"github.com/thunderbottom/kiln/internal/env"
 	"github.com/thunderbottom/kiln/internal/utils"
 )
@@ -18,45 +17,28 @@ type EditCmd struct {
 }
 
 func (c *EditCmd) Run(globals *Globals) error {
-	cfg, err := config.Load(globals.Config)
-	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
-	}
-
-	envFilePath := cfg.GetEnvFile(c.File)
-
-	ctx := context.Background()
-	privateKey, err := utils.LoadPrivateKey(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to load private key: %w", err)
-	}
-
-	ageManager, err := crypto.NewAgeManager(cfg.Recipients)
-	if err != nil {
-		return fmt.Errorf("failed to setup encryption: %w", err)
-	}
-
-	if err := ageManager.AddIdentity(privateKey); err != nil {
-		return fmt.Errorf("failed to add identity: %w", err)
-	}
-
-	plaintext, err := c.loadOrCreateTemplate(envFilePath, ageManager)
+	plaintext, err := c.loadOrCreateTemplate(globals)
 	if err != nil {
 		return err
 	}
 
-	return c.editAndSave(plaintext, envFilePath, ageManager)
+	return c.editAndSave(plaintext, globals)
 }
 
-func (c *EditCmd) loadOrCreateTemplate(envFilePath string, ageManager *crypto.AgeManager) ([]byte, error) {
-	if _, err := os.Stat(envFilePath); err == nil {
-		encrypted, err := os.ReadFile(envFilePath)
-		if err != nil {
-			return nil, fmt.Errorf("failed to read environment file: %w", err)
-		}
-		return ageManager.Decrypt(encrypted)
+func (c *EditCmd) loadOrCreateTemplate(globals *Globals) ([]byte, error) {
+	// Try to load existing file
+	envVars, err := core.LoadOrCreateEnvVars(globals.Config, c.File)
+	if err != nil {
+		return nil, err
 	}
 
+	// If we got variables, format them
+	if len(envVars) > 0 {
+		content := env.FormatEnvFile(envVars)
+		return []byte(content), nil
+	}
+
+	// Otherwise return template
 	return []byte(`# Environment Variables
 # Format: KEY=value
 DATABASE_URL=
@@ -65,7 +47,7 @@ DEBUG=false
 `), nil
 }
 
-func (c *EditCmd) editAndSave(plaintext []byte, envFilePath string, ageManager *crypto.AgeManager) error {
+func (c *EditCmd) editAndSave(plaintext []byte, globals *Globals) error {
 	tempFile, err := os.CreateTemp("", "kiln-edit-*.env")
 	if err != nil {
 		return fmt.Errorf("failed to create temporary file: %w", err)
@@ -97,7 +79,7 @@ func (c *EditCmd) editAndSave(plaintext []byte, envFilePath string, ageManager *
 		return nil
 	}
 
-	return c.saveChanges(tempFile.Name(), envFilePath, ageManager)
+	return c.saveChanges(tempFile.Name(), globals)
 }
 
 func (c *EditCmd) determineEditor() string {
@@ -118,7 +100,7 @@ func (c *EditCmd) launchEditor(editor, tempFile string) error {
 	return cmd.Run()
 }
 
-func (c *EditCmd) saveChanges(tempFile, envFilePath string, ageManager *crypto.AgeManager) error {
+func (c *EditCmd) saveChanges(tempFile string, globals *Globals) error {
 	modifiedContent, err := os.ReadFile(tempFile)
 	if err != nil {
 		return fmt.Errorf("failed to read modified content: %w", err)
@@ -126,19 +108,17 @@ func (c *EditCmd) saveChanges(tempFile, envFilePath string, ageManager *crypto.A
 
 	defer utils.WipeData(modifiedContent)
 
-	if _, err := env.ParseEnvFile(string(modifiedContent)); err != nil {
+	envVars, err := env.ParseEnvFile(string(modifiedContent))
+	if err != nil {
 		return fmt.Errorf("invalid environment file format: %w", err)
 	}
 
-	encrypted, err := ageManager.Encrypt(modifiedContent)
-	if err != nil {
-		return fmt.Errorf("failed to encrypt content: %w", err)
-	}
-
-	if err := utils.SaveFile(envFilePath, encrypted); err != nil {
+	if err := core.SaveEnvVars(globals.Config, c.File, envVars); err != nil {
 		return fmt.Errorf("failed to save environment file: %w", err)
 	}
 
+	cfg, _ := config.Load(globals.Config)
+	envFilePath := cfg.GetEnvFile(c.File)
 	fmt.Printf("Environment file updated: %s\n", envFilePath)
 	return nil
 }

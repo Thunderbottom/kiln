@@ -9,6 +9,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/thunderbottom/kiln/internal/core"
 	"github.com/thunderbottom/kiln/internal/env"
 )
 
@@ -28,7 +29,7 @@ func (c *RunCmd) Run(globals *Globals) error {
 		return fmt.Errorf("no command specified")
 	}
 
-	envVars, err := loadEnvVars(globals, c.File)
+	envVars, err := core.LoadEnvVars(globals.Config, c.File)
 	if err != nil {
 		return err
 	}
@@ -38,7 +39,6 @@ func (c *RunCmd) Run(globals *Globals) error {
 		if globals.Verbose {
 			fmt.Printf("Applying variable expansion\n")
 		}
-
 		envVars = env.ExpandVariables(envVars)
 	}
 

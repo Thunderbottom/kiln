@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type GetCmd struct {
@@ -13,7 +15,7 @@ type GetCmd struct {
 }
 
 func (c *GetCmd) Run(globals *Globals) error {
-	envVars, err := loadEnvVars(globals, c.File)
+	envVars, err := core.LoadEnvVars(globals.Config, c.File)
 	if err != nil {
 		return err
 	}
@@ -23,20 +25,11 @@ func (c *GetCmd) Run(globals *Globals) error {
 		return fmt.Errorf("variable %s not found", c.Key)
 	}
 
-	return c.outputValue(value)
-}
-
-func (c *GetCmd) outputValue(value string) error {
 	switch c.Format {
 	case "value":
 		fmt.Println(value)
 	case "json":
-		result := map[string]string{c.Key: value}
-		encoder := json.NewEncoder(os.Stdout)
-		return encoder.Encode(result)
-	default:
-		return fmt.Errorf("unsupported format: %s", c.Format)
+		return json.NewEncoder(os.Stdout).Encode(map[string]string{c.Key: value})
 	}
-
 	return nil
 }

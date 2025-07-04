@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/thunderbottom/kiln/internal/config"
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type StatusCmd struct {
@@ -14,7 +15,7 @@ type StatusCmd struct {
 func (c *StatusCmd) Run(globals *Globals) error {
 	cfg, err := config.Load(globals.Config)
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return err
 	}
 
 	fmt.Printf("Kiln Project Status\n")
@@ -28,22 +29,19 @@ func (c *StatusCmd) Run(globals *Globals) error {
 	}
 
 	if c.File != "" {
-		return c.showFileStatus(cfg, c.File)
+		return c.showFileStatus(globals, c.File)
 	}
 
 	for name := range cfg.Files {
-		if err := c.showFileStatus(cfg, name); err != nil {
+		if err := c.showFileStatus(globals, name); err != nil {
 			fmt.Printf("  %s: Error - %v\n", name, err)
 		}
 	}
-
 	return nil
 }
 
-func (c *StatusCmd) showFileStatus(cfg *config.Config, fileName string) error {
-	filePath := cfg.GetEnvFile(fileName)
-
-	info, err := os.Stat(filePath)
+func (c *StatusCmd) showFileStatus(globals *Globals, fileName string) error {
+	filePath, info, err := core.GetFileInfo(globals.Config, fileName)
 	if os.IsNotExist(err) {
 		fmt.Printf("  %s (%s): File not found\n", fileName, filePath)
 		return nil
@@ -54,6 +52,5 @@ func (c *StatusCmd) showFileStatus(cfg *config.Config, fileName string) error {
 
 	fmt.Printf("  %s (%s): %s (%d bytes)\n",
 		fileName, filePath, info.ModTime().Format("2006-01-02 15:04:05"), info.Size())
-
 	return nil
 }
