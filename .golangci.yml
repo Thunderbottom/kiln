@@ -1,0 +1,346 @@
+# golangci-lint v2 configuration for kiln project
+version: "2"
+
+# Options for analysis running
+run:
+  timeout: 5m
+  issues-exit-code: 1
+  tests: true
+  modules-download-mode: readonly
+  relative-path-mode: gomod
+  allow-parallel-runners: false
+
+# Output configuration
+output:
+  formats:
+    text:
+      path: stdout
+      print-linter-name: true
+      print-issued-lines: true
+      colors: true
+  sort-order:
+    - linter
+    - file
+  show-stats: true
+
+# Linters configuration
+linters:
+  # Default set of linters - using 'standard' for balanced approach
+  default: standard
+  
+  # Enable additional linters beyond standard
+  enable:
+    # Security
+    - gosec
+    
+    # Code quality and complexity
+    - gocyclo
+    - gocognit
+    - funlen
+    - nestif
+    
+    # Performance
+    - prealloc
+    - makezero
+    
+    # Error handling
+    - errorlint
+    - wrapcheck
+    
+    # Style and best practices
+    - goconst
+    - gocritic
+    - revive
+    - unconvert
+    - unparam
+    - varnamelen
+    - wastedassign
+    
+    # Interface design
+    - ireturn
+    - interfacebloat
+    
+    # Resource management
+    - bodyclose
+    - rowserrcheck
+    - sqlclosecheck
+    
+    # Context handling
+    - contextcheck
+    - noctx
+    
+    # Import organization
+    - depguard
+    
+    # Specific to your project
+    - zerologlint # Since you use zerolog
+    
+    # Whitespace and formatting checks
+    - whitespace
+    - wsl
+    - nlreturn
+
+  # Disable problematic linters for CLI tools
+  disable:
+    - gochecknoglobals # CLI tools often need global variables
+
+  # Linter settings
+  settings:
+    # Dependency Guard
+    depguard:
+      rules:
+        main:
+          allow:
+            - $gostd
+            - github.com/thunderbottom
+            - github.com/BurntSushi
+            - filippo.io/age
+            - github.com/alecthomas/kong
+            - github.com/joho/godotenv
+            - golang.org/x/
+            - gopkg.in/yaml.v3
+            - github.com/rs/zerolog
+    
+    # Error checking
+    errcheck:
+      check-type-assertions: true
+      check-blank: true
+      exclude-functions:
+        - (*os.File).Close
+        - (*github.com/rs/zerolog.Event).Msg
+
+    # Go vet settings
+    govet:
+      check-shadowing: true
+      enable-all: true
+      disable:
+        - fieldalignment # Can be noisy for config structs
+
+    # Static analysis
+    staticcheck:
+      checks: ["all"]
+
+    # Cyclomatic complexity
+    gocyclo:
+      min-complexity: 15
+
+    # Cognitive complexity
+    gocognit:
+      min-complexity: 20
+
+    # Function length
+    funlen:
+      lines: 80
+      statements: 50
+
+    # Magic numbers
+    mnd:
+      checks:
+        - argument
+        - case
+        - condition
+        - operation
+        - return
+        - assign
+      ignored-numbers:
+        - '0'
+        - '1'
+        - '2'
+        - '10'
+        - '100'
+        - '1024'
+        - '0600'
+        - '0700'
+        - '0755'
+
+    # Misspell
+    misspell:
+      locale: US
+
+    # Naming conventions
+    revive:
+      rules:
+        - name: blank-imports
+        - name: context-as-argument
+        - name: context-keys-type
+        - name: dot-imports
+        - name: empty-block
+        - name: errorf
+        - name: error-naming
+        - name: error-return
+        - name: error-strings
+        - name: exported
+          arguments: [checkPrivateReceivers, sayRepetitiveInsteadOfStutters]
+        - name: increment-decrement
+        - name: indent-error-flow
+        - name: package-comments
+        - name: range
+        - name: receiver-naming
+        - name: redefines-builtin-id
+        - name: superfluous-else
+        - name: time-naming
+        - name: unexported-return
+        - name: unreachable-code
+        - name: unused-parameter
+        - name: var-declaration
+        - name: var-naming
+
+    # Security
+    gosec:
+      excludes:
+        - G204 # Allow subprocess calls with variable input (needed for editor launching)
+        - G304 # Allow file path from variable (needed for config/key file handling)
+
+    # Error handling
+    errorlint:
+      errorf: true
+      asserts: true
+      comparison: true
+
+    # Interface pollution
+    ireturn:
+      allow:
+        - anon
+        - error
+        - empty
+        - stdlib
+        - "github.com/rs/zerolog.Logger"
+
+    # Variable naming
+    varnamelen:
+      min-name-length: 2
+      ignore-type-assert-ok: true
+      ignore-map-index-ok: true
+      ignore-chan-recv-ok: true
+      ignore-names:
+        - err
+        - ok
+        - id
+        - i
+        - j
+        - k
+        - v
+        - w
+        - r
+
+    # Whitespace
+    wsl:
+      strict-append: true
+      allow-assign-and-call: true
+      allow-multiline-assign: true
+      allow-cuddle-declarations: false
+      allow-trailing-comment: false
+      force-case-trailing-whitespace: 0
+
+    # Conditional complexity
+    nestif:
+      min-complexity: 5
+
+    # Slice preallocation
+    prealloc:
+      simple: true
+      range-loops: true
+      for-loops: false
+
+  # Exclusion rules for linters
+  exclusions:
+    # Be lenient with generated files
+    generated: lax
+    
+    # Log warnings for unused exclusion rules
+    warn-unused: true
+    
+    # Exclude specific issues per path/linter/text
+    rules:
+      # Disable linters for test files
+      - path: _test\.go
+        linters:
+          - errcheck
+          - funlen
+          - gocognit
+          - gocyclo
+          - gosec
+          - govet
+
+      # Allow global variables in main.go (version info)
+      - path: main\.go
+        text: "version|commit|date.*is a global variable"
+        linters:
+          - gochecknoglobals
+
+      # Disable magic number detection for common file permissions
+      - text: "Magic number: 0[6-7][0-5][0-5]"
+        linters:
+          - mnd
+
+      # Disable wrapcheck for internal packages
+      - path: internal/
+        text: "error returned from external package is unwrapped"
+        linters:
+          - wrapcheck
+
+      # Exclude some staticcheck messages
+      - linters:
+          - staticcheck
+        text: "SA9003:"
+
+      # Exclude lll issues for long lines with go:generate
+      - linters:
+          - lll
+        source: "^//go:generate "
+
+# Formatters configuration (separate from linters in v2)
+formatters:
+  # Enable specific formatters
+  enable:
+    - gofumpt    # Enhanced gofmt with additional rules
+    - goimports  # Automatically add/remove imports
+    
+  # Formatter settings
+  settings:
+    # gofumpt settings
+    gofumpt:
+      lang-version: "1.24"
+      extra-rules: true
+    
+    # goimports settings
+    goimports:
+      local-prefixes: github.com/thunderbottom/kiln
+
+  # Formatter exclusions
+  exclusions:
+    # Strict mode for generated files
+    generated: strict
+    
+    # Log warnings for unused exclusion paths
+    warn-unused: true
+
+# Issues configuration
+issues:
+  # No limit on issues per linter
+  max-issues-per-linter: 0
+  
+  # No limit on same issues
+  max-same-issues: 0
+  
+  # Make issues unique by line
+  uniq-by-line: true
+  
+  # Don't auto-fix in CI/CD
+  fix: false
+
+# Severity configuration
+severity:
+  # Default severity for all issues
+  default: error
+  
+  # Case sensitive severity matching
+  case-sensitive: false
+  
+  # Severity rules for specific linters
+  rules:
+    - linters:
+        - misspell
+        - whitespace
+        - nlreturn
+      severity: warning
