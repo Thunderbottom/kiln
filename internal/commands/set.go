@@ -9,13 +9,14 @@ type SetCmd struct {
 }
 
 func (c *SetCmd) Run(globals *Globals) error {
-	envVars, err := core.LoadOrCreateEnvVars(globals.Config, c.File)
+	ctx := globals.Context()
+	envVars, err := core.LoadOrCreateEnvVars(ctx, globals.Config, c.File)
 	if err != nil {
 		return err
 	}
 
 	envVars[c.Key] = c.Value
-	if err := core.SaveEnvVars(globals.Config, c.File, envVars); err != nil {
+	if err := core.SaveEnvVars(ctx, globals.Config, c.File, envVars); err != nil {
 		return err
 	}
 

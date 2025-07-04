@@ -29,7 +29,8 @@ func (c *RunCmd) Run(globals *Globals) error {
 		return fmt.Errorf("no command specified")
 	}
 
-	envVars, err := core.LoadEnvVars(globals.Config, c.File)
+	ctx := globals.Context()
+	envVars, err := core.LoadEnvVars(ctx, globals.Config, c.File)
 	if err != nil {
 		return err
 	}

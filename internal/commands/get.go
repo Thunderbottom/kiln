@@ -15,7 +15,8 @@ type GetCmd struct {
 }
 
 func (c *GetCmd) Run(globals *Globals) error {
-	envVars, err := core.LoadEnvVars(globals.Config, c.File)
+	ctx := globals.Context()
+	envVars, err := core.LoadEnvVars(ctx, globals.Config, c.File)
 	if err != nil {
 		return err
 	}

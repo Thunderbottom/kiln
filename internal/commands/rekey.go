@@ -62,8 +62,9 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 	}
 	defer os.Remove(tempConfig)
 
+	ctx := globals.Context()
 	// Load environment variables with old configuration
-	envVars, err := core.LoadEnvVars(tempConfig, c.File)
+	envVars, err := core.LoadEnvVars(ctx, tempConfig, c.File)
 	if err != nil {
 		return fmt.Errorf("failed to load with old keys: %w", err)
 	}
@@ -74,7 +75,7 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 	}
 
 	// Save environment variables with new recipients
-	if err := core.SaveEnvVars(globals.Config, c.File, envVars); err != nil {
+	if err := core.SaveEnvVars(ctx, globals.Config, c.File, envVars); err != nil {
 		return fmt.Errorf("failed to save with new keys: %w", err)
 	}
 

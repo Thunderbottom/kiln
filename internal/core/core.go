@@ -27,10 +27,16 @@ const (
 )
 
 // LoadEnvVars loads and decrypts environment variables from file
-func LoadEnvVars(configPath, fileName string) (map[string]string, error) {
+func LoadEnvVars(ctx context.Context, configPath, fileName string) (map[string]string, error) {
 	cfg, ageManager, err := SetupEncryption(configPath)
 	if err != nil {
 		return nil, err
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 
 	envFilePath := cfg.GetEnvFile(fileName)
@@ -43,11 +49,11 @@ func LoadEnvVars(configPath, fileName string) (map[string]string, error) {
 		return nil, fmt.Errorf("%s: %w", ErrReadFile, err)
 	}
 
-	return DecryptAndParse(ageManager, encrypted)
+	return DecryptAndParse(ctx, ageManager, encrypted)
 }
 
 // LoadOrCreateEnvVars loads existing vars or returns empty map if file doesn't exist
-func LoadOrCreateEnvVars(configPath, fileName string) (map[string]string, error) {
+func LoadOrCreateEnvVars(ctx context.Context, configPath, fileName string) (map[string]string, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
@@ -58,18 +64,24 @@ func LoadOrCreateEnvVars(configPath, fileName string) (map[string]string, error)
 		return make(map[string]string), nil
 	}
 
-	return LoadEnvVars(configPath, fileName)
+	return LoadEnvVars(ctx, configPath, fileName)
 }
 
 // SaveEnvVars encrypts and saves environment variables to file
-func SaveEnvVars(configPath, fileName string, envVars map[string]string) error {
+func SaveEnvVars(ctx context.Context, configPath, fileName string, envVars map[string]string) error {
 	cfg, ageManager, err := SetupEncryption(configPath)
 	if err != nil {
 		return err
 	}
 
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	default:
+	}
+
 	content := env.FormatEnvFile(envVars)
-	encrypted, err := ageManager.Encrypt([]byte(content))
+	encrypted, err := ageManager.Encrypt(ctx, []byte(content))
 	if err != nil {
 		return fmt.Errorf("%s: %w", ErrEncrypt, err)
 	}
@@ -116,8 +128,8 @@ func CheckFileExists(filePath string) error {
 }
 
 // DecryptAndParse decrypts data and parses environment variables
-func DecryptAndParse(ageManager *crypto.AgeManager, encrypted []byte) (map[string]string, error) {
-	plaintext, err := ageManager.Decrypt(encrypted)
+func DecryptAndParse(ctx context.Context, ageManager *crypto.AgeManager, encrypted []byte) (map[string]string, error) {
+	plaintext, err := ageManager.Decrypt(ctx, encrypted)
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", ErrDecrypt, err)
 	}
@@ -186,7 +198,7 @@ func SortedKeys(envVars map[string]string) []string {
 }
 
 // ValidateEnvFile validates that a file can be decrypted and parsed
-func ValidateEnvFile(configPath, fileName string) error {
-	_, err := LoadEnvVars(configPath, fileName)
+func ValidateEnvFile(ctx context.Context, configPath, fileName string) error {
+	_, err := LoadEnvVars(ctx, configPath, fileName)
 	return err
 }

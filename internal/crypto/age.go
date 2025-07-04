@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -62,13 +63,19 @@ func (am *AgeManager) AddIdentity(privateKey string) error {
 }
 
 // Encrypt encrypts data using all configured recipients
-func (am *AgeManager) Encrypt(data []byte) ([]byte, error) {
+func (am *AgeManager) Encrypt(ctx context.Context, data []byte) ([]byte, error) {
 	if len(am.recipients) == 0 {
 		return nil, fmt.Errorf("no recipients configured")
 	}
 
 	if len(data) == 0 {
 		return nil, fmt.Errorf("no data to encrypt")
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 
 	var buf bytes.Buffer
@@ -89,13 +96,19 @@ func (am *AgeManager) Encrypt(data []byte) ([]byte, error) {
 }
 
 // Decrypt decrypts data using configured identities
-func (am *AgeManager) Decrypt(data []byte) ([]byte, error) {
+func (am *AgeManager) Decrypt(ctx context.Context, data []byte) ([]byte, error) {
 	if len(am.identities) == 0 {
 		return nil, fmt.Errorf("no identities configured")
 	}
 
 	if len(data) == 0 {
 		return nil, fmt.Errorf("no data to decrypt")
+	}
+
+	select {
+	case <-ctx.Done():
+		return nil, ctx.Err()
+	default:
 	}
 
 	r, err := age.Decrypt(bytes.NewReader(data), am.identities...)

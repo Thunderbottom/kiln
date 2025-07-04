@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -74,13 +75,15 @@ func (c *InitCmd) createEmptyEnvFile(envFile string, recipients []string) error 
 		return err
 	}
 
+	ctx := context.Background()
+
 	template := `# Kiln Environment Variables
 # Format: KEY=value
 DATABASE_URL=
 API_TOKEN=
 DEBUG=false
 `
-	encrypted, err := ageManager.Encrypt([]byte(template))
+	encrypted, err := ageManager.Encrypt(ctx, []byte(template))
 	if err != nil {
 		return err
 	}

@@ -10,9 +10,8 @@ import (
 
 // Globals contains global configuration shared across all commands
 type Globals struct {
-	Config  string
-	Verbose bool
-	Logger  *slog.Logger
+	Config string
+	Logger *slog.Logger
 }
 
 // NewGlobals creates a new Globals instance with proper logger setup
@@ -37,9 +36,8 @@ func NewGlobals(config string, verbose bool) *Globals {
 	logger := slog.New(tint.NewHandler(os.Stderr, opts))
 
 	return &Globals{
-		Config:  config,
-		Verbose: verbose,
-		Logger:  logger,
+		Config: config,
+		Logger: logger,
 	}
 }
 

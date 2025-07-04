@@ -27,7 +27,8 @@ func (c *EditCmd) Run(globals *Globals) error {
 
 func (c *EditCmd) loadOrCreateTemplate(globals *Globals) ([]byte, error) {
 	// Try to load existing file
-	envVars, err := core.LoadOrCreateEnvVars(globals.Config, c.File)
+	ctx := globals.Context()
+	envVars, err := core.LoadOrCreateEnvVars(ctx, globals.Config, c.File)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +114,8 @@ func (c *EditCmd) saveChanges(tempFile string, globals *Globals) error {
 		return fmt.Errorf("invalid environment file format: %w", err)
 	}
 
-	if err := core.SaveEnvVars(globals.Config, c.File, envVars); err != nil {
+	ctx := globals.Context()
+	if err := core.SaveEnvVars(ctx, globals.Config, c.File, envVars); err != nil {
 		return fmt.Errorf("failed to save environment file: %w", err)
 	}
 
