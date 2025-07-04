@@ -157,26 +157,3 @@ func Exists(path string) bool {
 	_, err := os.Stat(path)
 	return err == nil
 }
-
-// FindConfigFile searches for a config file in current and parent directories
-func FindConfigFile() (string, error) {
-	cwd, err := os.Getwd()
-	if err != nil {
-		return "", fmt.Errorf("failed to get working directory: %v", err)
-	}
-
-	for {
-		configPath := filepath.Join(cwd, DefaultConfigFile)
-		if _, err := os.Stat(configPath); err == nil {
-			return configPath, nil
-		}
-
-		parent := filepath.Dir(cwd)
-		if parent == cwd {
-			break
-		}
-		cwd = parent
-	}
-
-	return "", fmt.Errorf("kiln configuration not found")
-}

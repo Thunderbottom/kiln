@@ -159,22 +159,3 @@ func ValidatePublicKey(key string) error {
 
 	return nil
 }
-
-// ValidatePrivateKey validates an Age private key format
-func ValidatePrivateKey(key string) error {
-	key = strings.TrimSpace(key)
-	if key == "" {
-		return fmt.Errorf("empty private key")
-	}
-
-	if !strings.HasPrefix(key, "AGE-SECRET-KEY-") {
-		return fmt.Errorf("private key must start with 'AGE-SECRET-KEY-'")
-	}
-
-	_, err := age.ParseX25519Identity(key)
-	if err != nil {
-		return fmt.Errorf("invalid private key format: %w", err)
-	}
-
-	return nil
-}

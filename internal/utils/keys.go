@@ -124,25 +124,6 @@ func ExpandPath(path string) string {
 	return path
 }
 
-// CreateSecureTempFile creates a temporary file with restrictive permissions
-func CreateSecureTempFile(pattern string) (string, error) {
-	file, err := os.CreateTemp("", pattern)
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-
-	filename := file.Name()
-	file.Close()
-
-	// Set restrictive permissions
-	if err := os.Chmod(filename, 0600); err != nil {
-		os.Remove(filename)
-		return "", fmt.Errorf("failed to set file permissions: %w", err)
-	}
-
-	return filename, nil
-}
-
 // SavePrivateKey saves a private key to a file with secure permissions
 func SavePrivateKey(privateKey, filename string) error {
 	// Create directory if needed

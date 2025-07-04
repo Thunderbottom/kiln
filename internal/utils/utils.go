@@ -38,15 +38,3 @@ func WithWipeData(data []byte, fn func([]byte) error) error {
 	defer WipeData(data)
 	return fn(data)
 }
-
-// WipeString securely clears a string by converting to bytes and clearing
-func WipeString(s *string) {
-	if s == nil || *s == "" {
-		return
-	}
-
-	// Convert to byte slice and clear
-	data := []byte(*s)
-	WipeData(data)
-	*s = ""
-}
