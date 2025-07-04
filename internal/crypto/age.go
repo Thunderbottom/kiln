@@ -2,28 +2,43 @@ package crypto
 
 import (
 	"bytes"
-	"errors"
+	"fmt"
 	"io"
 	"strings"
 
 	"filippo.io/age"
-	kilnErrors "github.com/thunderbottom/kiln/internal/errors"
+	"github.com/thunderbottom/kiln/internal/errors"
 )
 
+// AgeManager handles Age encryption/decryption operations
 type AgeManager struct {
 	recipients []age.Recipient
 	identities []age.Identity
 }
 
+// NewAgeManager creates a new Age manager with the given public keys
 func NewAgeManager(publicKeys []string) (*AgeManager, error) {
+	if len(publicKeys) == 0 {
+		return nil, fmt.Errorf("no public keys provided")
+	}
+
 	recipients := make([]age.Recipient, 0, len(publicKeys))
 
 	for _, key := range publicKeys {
+		key = strings.TrimSpace(key)
+		if key == "" {
+			continue
+		}
+
 		recipient, err := age.ParseX25519Recipient(key)
 		if err != nil {
-			return nil, kilnErrors.Wrapf(err, "invalid public key: %s", key)
+			return nil, errors.Wrapf(err, "invalid public key: %s", key)
 		}
 		recipients = append(recipients, recipient)
+	}
+
+	if len(recipients) == 0 {
+		return nil, fmt.Errorf("no valid public keys found")
 	}
 
 	return &AgeManager{
@@ -31,91 +46,122 @@ func NewAgeManager(publicKeys []string) (*AgeManager, error) {
 	}, nil
 }
 
+// AddIdentity adds a private key identity for decryption
 func (am *AgeManager) AddIdentity(privateKey string) error {
+	privateKey = strings.TrimSpace(privateKey)
+	if privateKey == "" {
+		return fmt.Errorf("empty private key")
+	}
+
 	identity, err := age.ParseX25519Identity(privateKey)
 	if err != nil {
-		return kilnErrors.Wrap(err, "invalid private key")
+		return errors.Wrap(err, "invalid private key")
 	}
 
 	am.identities = append(am.identities, identity)
 	return nil
 }
 
+// Encrypt encrypts data using all configured recipients
 func (am *AgeManager) Encrypt(data []byte) ([]byte, error) {
 	if len(am.recipients) == 0 {
-		return nil, errors.New("no recipients configured")
+		return nil, fmt.Errorf("no recipients configured")
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no data to encrypt")
 	}
 
 	var buf bytes.Buffer
 	w, err := age.Encrypt(&buf, am.recipients...)
 	if err != nil {
-		return nil, kilnErrors.Wrap(err, "failed to create age writer")
+		return nil, errors.New("crypto.Encrypt", err)
 	}
 
 	if _, err := w.Write(data); err != nil {
-		return nil, kilnErrors.Wrap(err, "failed to write data")
+		return nil, errors.New("crypto.Encrypt", err)
 	}
 
 	if err := w.Close(); err != nil {
-		return nil, kilnErrors.Wrap(err, "failed to close age writer")
+		return nil, errors.New("crypto.Encrypt", err)
 	}
 
 	return buf.Bytes(), nil
 }
 
+// Decrypt decrypts data using configured identities
 func (am *AgeManager) Decrypt(data []byte) ([]byte, error) {
 	if len(am.identities) == 0 {
-		return nil, errors.New("no identities configured")
+		return nil, fmt.Errorf("no identities configured")
+	}
+
+	if len(data) == 0 {
+		return nil, fmt.Errorf("no data to decrypt")
 	}
 
 	r, err := age.Decrypt(bytes.NewReader(data), am.identities...)
 	if err != nil {
-		return nil, kilnErrors.Wrap(err, "failed to decrypt data")
+		return nil, errors.New("crypto.Decrypt", err)
 	}
 
 	result, err := io.ReadAll(r)
 	if err != nil {
-		return nil, kilnErrors.Wrap(err, "failed to read decrypted data")
+		return nil, errors.New("crypto.Decrypt", err)
 	}
 
 	return result, nil
 }
 
-func GenerateKeyPair() (string, string, error) {
+// GenerateKeyPair generates a new Age key pair
+func GenerateKeyPair() (privateKey, publicKey string, err error) {
 	identity, err := age.GenerateX25519Identity()
 	if err != nil {
-		return "", "", kilnErrors.Wrap(err, "failed to generate identity")
+		return "", "", errors.New("crypto.GenerateKeyPair", err)
 	}
 
-	privateKey := identity.String()
-	publicKey := identity.Recipient().String()
+	privateKey = identity.String()
+	publicKey = identity.Recipient().String()
 
 	return privateKey, publicKey, nil
 }
 
+// ValidatePublicKey validates an Age public key format
 func ValidatePublicKey(key string) error {
 	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("empty public key")
+	}
+
 	if !strings.HasPrefix(key, "age1") {
-		return errors.New("public key must start with 'age1'")
+		return fmt.Errorf("public key must start with 'age1'")
+	}
+
+	if len(key) != 62 { // age1 + 58 characters
+		return fmt.Errorf("invalid public key length")
 	}
 
 	_, err := age.ParseX25519Recipient(key)
 	if err != nil {
-		return kilnErrors.Wrap(err, "invalid public key format")
+		return errors.Wrap(err, "invalid public key format")
 	}
 
 	return nil
 }
 
+// ValidatePrivateKey validates an Age private key format
 func ValidatePrivateKey(key string) error {
 	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("empty private key")
+	}
+
 	if !strings.HasPrefix(key, "AGE-SECRET-KEY-") {
-		return errors.New("private key must start with 'AGE-SECRET-KEY-'")
+		return fmt.Errorf("private key must start with 'AGE-SECRET-KEY-'")
 	}
 
 	_, err := age.ParseX25519Identity(key)
 	if err != nil {
-		return kilnErrors.Wrap(err, "invalid private key format")
+		return errors.Wrap(err, "invalid private key format")
 	}
 
 	return nil
