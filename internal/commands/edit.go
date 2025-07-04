@@ -1,113 +1,80 @@
-package cmd
+package commands
 
 import (
 	"context"
+	"flag"
 	"fmt"
 	"os"
 	"os/exec"
 	"time"
 
-	"github.com/spf13/cobra"
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/crypto"
 	"github.com/thunderbottom/kiln/internal/env"
-	"github.com/thunderbottom/kiln/internal/errors"
 	"github.com/thunderbottom/kiln/internal/utils"
 )
 
-var (
-	editFile     string
-	editEditor   string
-	editValidate bool
-)
-
-var editCmd = &cobra.Command{
-	Use:   "edit [file]",
-	Short: "Edit encrypted environment variables",
-	Long:  GetLongDescription("edit", EditDescription),
-	RunE:  runEdit,
-	ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		cfg, err := config.Load("")
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
+func Edit(ctx context.Context, args []string) error {
+	// Check for help flags first
+	for _, arg := range args {
+		if arg == "-h" || arg == "--help" || arg == "help" {
+			printEditUsage()
+			return nil
 		}
+	}
 
-		var completions []string
-		for name := range cfg.ListEnvFiles() {
-			completions = append(completions, name)
+	fs := flag.NewFlagSet("edit", flag.ContinueOnError)
+
+	file := fs.String("file", "default", "environment file to edit")
+	editor := fs.String("editor", "", "editor to use (overrides $EDITOR)")
+	validate := fs.Bool("validate", true, "validate environment file after editing")
+	verbose := fs.Bool("v", false, "verbose output")
+
+	fs.Usage = printEditUsage
+
+	if err := fs.Parse(args); err != nil {
+		if err == flag.ErrHelp {
+			return nil
 		}
-		return completions, cobra.ShellCompDirectiveNoFileComp
-	},
-}
+		return err
+	}
 
-func init() {
-	rootCmd.AddCommand(editCmd)
-
-	editCmd.Flags().StringVar(&editFile, "file", "",
-		"environment file to edit (default: from config)")
-	editCmd.Flags().StringVar(&editEditor, "editor", "",
-		"editor to use (overrides $EDITOR)")
-	editCmd.Flags().BoolVar(&editValidate, "validate", true,
-		"validate environment file after editing")
-
-	// Add bash completion
-	editCmd.RegisterFlagCompletionFunc("file", func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		cfg, err := config.Load("")
-		if err != nil {
-			return nil, cobra.ShellCompDirectiveNoFileComp
-		}
-
-		var completions []string
-		for name := range cfg.ListEnvFiles() {
-			completions = append(completions, name)
-		}
-		return completions, cobra.ShellCompDirectiveNoFileComp
-	})
-}
-
-func runEdit(cmd *cobra.Command, args []string) error {
-	ctx := cmd.Context()
+	// Handle positional argument for file
+	if fs.NArg() > 0 {
+		*file = fs.Arg(0)
+	}
 
 	// Load configuration
 	cfg, err := config.Load("")
 	if err != nil {
-		return errors.Wrap(err, "failed to load configuration")
+		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	// Determine which file to edit
-	envFile := editFile
-	if envFile == "" {
-		if len(args) > 0 {
-			envFile = args[0]
-		} else {
-			envFile = "default"
-		}
-	}
+	// Get environment file path
+	envFilePath := cfg.GetEnvFile(*file)
 
-	envFilePath := cfg.GetEnvFile(envFile)
-
-	if IsVerbose() {
-		fmt.Printf("Editing environment file: %s (%s)\n", envFile, envFilePath)
+	if *verbose {
+		fmt.Printf("Editing environment file: %s (%s)\n", *file, envFilePath)
 	}
 
 	// Load private key
 	privateKey, keyInfo, err := utils.LoadPrivateKey(ctx)
 	if err != nil {
-		return errors.Wrap(err, "failed to load private key")
+		return fmt.Errorf("failed to load private key: %w", err)
 	}
 
-	if IsVerbose() {
+	if *verbose {
 		fmt.Printf("Loaded private key from: %s\n", keyInfo.Source)
 	}
 
 	// Setup age manager
 	ageManager, err := crypto.NewAgeManager(cfg.Recipients)
 	if err != nil {
-		return errors.Wrap(err, "failed to setup encryption")
+		return fmt.Errorf("failed to setup encryption: %w", err)
 	}
 
 	if err := ageManager.AddIdentity(privateKey); err != nil {
-		return errors.Wrap(err, "failed to add identity")
+		return fmt.Errorf("failed to add identity: %w", err)
 	}
 
 	// Read and decrypt existing file or create template
@@ -116,14 +83,14 @@ func runEdit(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
-	if !existed && IsVerbose() {
+	if !existed && *verbose {
 		fmt.Printf("File doesn't exist, created template\n")
 	}
 
 	// Create secure temporary file
 	tempFile, err := utils.CreateSecureTempFile("kiln-edit-*.env")
 	if err != nil {
-		return errors.Wrap(err, "failed to create temporary file")
+		return fmt.Errorf("failed to create temporary file: %w", err)
 	}
 	defer func() {
 		utils.SecureDelete(tempFile)
@@ -131,29 +98,29 @@ func runEdit(cmd *cobra.Command, args []string) error {
 
 	// Write plaintext to temp file
 	if err := os.WriteFile(tempFile, plaintext, 0600); err != nil {
-		return errors.Wrap(err, "failed to write to temporary file")
+		return fmt.Errorf("failed to write to temporary file: %w", err)
 	}
 
 	// Get file modification time before editing
 	beforeStat, err := os.Stat(tempFile)
 	if err != nil {
-		return errors.Wrap(err, "failed to stat temporary file")
+		return fmt.Errorf("failed to stat temporary file: %w", err)
 	}
 
 	// Determine and launch editor
-	editor := determineEditor()
-	if IsVerbose() {
-		fmt.Printf("Opening editor: %s\n", editor)
+	editorCmd := determineEditor(*editor)
+	if *verbose {
+		fmt.Printf("Opening editor: %s\n", editorCmd)
 	}
 
-	if err := launchEditor(ctx, editor, tempFile); err != nil {
-		return errors.Wrap(err, "editor failed")
+	if err := launchEditor(ctx, editorCmd, tempFile); err != nil {
+		return fmt.Errorf("editor failed: %w", err)
 	}
 
 	// Check if file was modified
 	afterStat, err := os.Stat(tempFile)
 	if err != nil {
-		return errors.Wrap(err, "failed to stat temporary file after editing")
+		return fmt.Errorf("failed to stat temporary file after editing: %w", err)
 	}
 
 	if !afterStat.ModTime().After(beforeStat.ModTime()) {
@@ -164,13 +131,13 @@ func runEdit(cmd *cobra.Command, args []string) error {
 	// Read modified content
 	modifiedContent, err := os.ReadFile(tempFile)
 	if err != nil {
-		return errors.Wrap(err, "failed to read modified content")
+		return fmt.Errorf("failed to read modified content: %w", err)
 	}
 
 	// Validate content if requested
-	if editValidate {
+	if *validate {
 		if err := validateContent(modifiedContent); err != nil {
-			fmt.Printf("❌ Validation failed: %v\n", err)
+			fmt.Printf("Validation failed: %v\n", err)
 			fmt.Printf("Save anyway? [y/N]: ")
 
 			var response string
@@ -178,29 +145,55 @@ func runEdit(cmd *cobra.Command, args []string) error {
 			if response != "y" && response != "Y" && response != "yes" {
 				return fmt.Errorf("validation failed, changes not saved")
 			}
-		} else if IsVerbose() {
-			fmt.Printf("✅ Content validation passed\n")
+		} else if *verbose {
+			fmt.Printf("Content validation passed\n")
 		}
 	}
 
 	// Encrypt and save
 	encrypted, err := ageManager.Encrypt(modifiedContent)
 	if err != nil {
-		return errors.Wrap(err, "failed to encrypt content")
+		return fmt.Errorf("failed to encrypt content: %w", err)
 	}
 
 	if err := utils.SaveFile(envFilePath, encrypted); err != nil {
-		return errors.Wrap(err, "failed to save environment file")
+		return fmt.Errorf("failed to save environment file: %w", err)
 	}
 
-	fmt.Printf("✅ Environment file updated: %s\n", envFilePath)
+	fmt.Printf("Environment file updated: %s\n", envFilePath)
 
 	// Show summary if verbose
-	if IsVerbose() {
+	if *verbose {
 		showEditSummary(plaintext, modifiedContent)
 	}
 
 	return nil
+}
+
+// printEditUsage prints the usage information for the edit command
+func printEditUsage() {
+	fmt.Print(`Usage: kiln edit [flags] [file]
+
+Edit encrypted environment variables in your default editor.
+
+Flags:
+  -file string     environment file to edit (default "default")
+  -editor string   editor to use (overrides $EDITOR)
+  -validate        validate environment file after editing (default true)
+  -v               verbose output
+
+The editor respects the following precedence:
+  1. -editor flag
+  2. KILN_EDITOR environment variable
+  3. EDITOR environment variable
+  4. vi (fallback)
+
+Examples:
+  kiln edit
+  kiln edit -file staging
+  kiln edit -editor nano
+  kiln edit -validate=false
+`)
 }
 
 func readOrCreateTemplate(envFilePath string, ageManager *crypto.AgeManager) ([]byte, bool, error) {
@@ -208,12 +201,12 @@ func readOrCreateTemplate(envFilePath string, ageManager *crypto.AgeManager) ([]
 	if _, err := os.Stat(envFilePath); err == nil {
 		encrypted, err := os.ReadFile(envFilePath)
 		if err != nil {
-			return nil, false, errors.Wrap(err, "failed to read environment file")
+			return nil, false, fmt.Errorf("failed to read environment file: %w", err)
 		}
 
 		plaintext, err := ageManager.Decrypt(encrypted)
 		if err != nil {
-			return nil, false, errors.Wrap(err, "failed to decrypt environment file")
+			return nil, false, fmt.Errorf("failed to decrypt environment file: %w", err)
 		}
 
 		return plaintext, true, nil
@@ -240,10 +233,10 @@ func readOrCreateTemplate(envFilePath string, ageManager *crypto.AgeManager) ([]
 	return []byte(template), false, nil
 }
 
-func determineEditor() string {
+func determineEditor(editorFlag string) string {
 	// Check flag first
-	if editEditor != "" {
-		return editEditor
+	if editorFlag != "" {
+		return editorFlag
 	}
 
 	// Check KILN_EDITOR
@@ -276,34 +269,16 @@ func launchEditor(ctx context.Context, editor, tempFile string) error {
 }
 
 func validateContent(content []byte) error {
-	result := env.ParseEnvFileDetailed(string(content))
-
-	// Report errors
-	if len(result.Errors) > 0 {
-		fmt.Printf("\nValidation errors found:\n")
-		for _, err := range result.Errors {
-			fmt.Printf("  • %s\n", err.String())
-		}
-		return fmt.Errorf("found %d validation error(s)", len(result.Errors))
-	}
-
-	// Report warnings
-	if len(result.Warnings) > 0 {
-		fmt.Printf("\nWarnings:\n")
-		for _, warning := range result.Warnings {
-			fmt.Printf("  • %s\n", warning)
-		}
-	}
-
-	return nil
+	_, err := env.ParseEnvFile(string(content))
+	return err
 }
 
 func showEditSummary(before, after []byte) {
-	beforeResult := env.ParseEnvFileDetailed(string(before))
-	afterResult := env.ParseEnvFileDetailed(string(after))
+	beforeVars, _ := env.ParseEnvFile(string(before))
+	afterVars, _ := env.ParseEnvFile(string(after))
 
-	beforeCount := len(beforeResult.Variables)
-	afterCount := len(afterResult.Variables)
+	beforeCount := len(beforeVars)
+	afterCount := len(afterVars)
 
 	fmt.Printf("\nEdit Summary:\n")
 	fmt.Printf("  Variables before: %d\n", beforeCount)
@@ -317,8 +292,8 @@ func showEditSummary(before, after []byte) {
 
 	// Show modified variables
 	modified := 0
-	for key, afterVal := range afterResult.Variables {
-		if beforeVal, exists := beforeResult.Variables[key]; exists && beforeVal != afterVal {
+	for key, afterVal := range afterVars {
+		if beforeVal, exists := beforeVars[key]; exists && beforeVal != afterVal {
 			modified++
 		}
 	}

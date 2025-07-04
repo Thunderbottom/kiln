@@ -5,9 +5,9 @@ VERSION?=dev
 COMMIT?=$(shell git rev-parse --short HEAD 2>/dev/null || echo "unknown")
 DATE?=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ")
 
-LDFLAGS=-ldflags "-X github.com/thunderbottom/kiln/cmd.version=$(VERSION) \
-	-X github.com/thunderbottom/kiln/cmd.commit=$(COMMIT) \
-	-X github.com/thunderbottom/kiln/cmd.date=$(DATE)"
+LDFLAGS=-ldflags "-X main.version=$(VERSION) \
+	-X main.commit=$(COMMIT) \
+	-X main.date=$(DATE)"
 
 build:
 	CGO_ENABLED=0 go build $(LDFLAGS) -o bin/$(BINARY_NAME) .
