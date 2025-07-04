@@ -1,0 +1,9 @@
+[recipients]
+  chnmy = "age1rvr5zpjq6m2s6rneem8rj4sk4lxr872q0ej5gr5eufzrp0r75veq6rfrxx"
+
+[groups]
+
+[files]
+  [files.default]
+    filename = ".kiln.env"
+    access = ["*"]
