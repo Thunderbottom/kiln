@@ -9,18 +9,32 @@ import (
 	"gopkg.in/yaml.v3"
 
 	"github.com/thunderbottom/kiln/internal/core"
+	"github.com/thunderbottom/kiln/internal/env"
 )
 
 type ExportCmd struct {
-	File   string `short:"f" help:"Environment file to export" default:"default"`
-	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
-	Mask   bool   `help:"Mask sensitive values"`
+	File          string `short:"f" help:"Environment file to export" default:"default"`
+	Format        string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
+	Mask          bool   `help:"Mask sensitive values"`
+	Expand        bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	AllowCommands bool   `help:"Allow command substitution ($$(command) syntax)"`
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
 	envVars, err := core.LoadEnvVars(globals.Config, c.File)
 	if err != nil {
 		return err
+	}
+
+	// Apply variable expansion if enabled
+	if c.Expand {
+		if globals.Verbose {
+			fmt.Fprintf(os.Stderr, "Applying variable expansion\n")
+			if c.AllowCommands {
+				fmt.Fprintf(os.Stderr, "Command substitution enabled\n")
+			}
+		}
+		envVars = env.ExpandVariables(envVars, c.AllowCommands)
 	}
 
 	envVars = core.ProcessEnvVars(envVars, c.Mask)

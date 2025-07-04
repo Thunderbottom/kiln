@@ -1,47 +1,53 @@
 package env
 
 import (
-	"maps"
 	"os"
+	"os/exec"
 	"regexp"
 	"strings"
 )
 
 // ExpandVariables performs simple variable expansion in environment values
-func ExpandVariables(envVars map[string]string) map[string]string {
+func ExpandVariables(envVars map[string]string, allowCommands bool) map[string]string {
 	expanded := make(map[string]string)
 
-	// Create combined environment for lookups
-	lookup := make(map[string]string)
-
-	// Add system environment
-	for _, env := range os.Environ() {
-		if parts := strings.SplitN(env, "=", 2); len(parts) == 2 {
-			lookup[parts[0]] = parts[1]
-		}
+	// Set up environment for expansion
+	for key, value := range envVars {
+		os.Setenv(key, value)
 	}
-
-	// Add kiln environment (takes precedence)
-	maps.Copy(lookup, envVars)
 
 	// Expand each variable
 	for key, value := range envVars {
-		expanded[key] = expandValue(value, lookup)
+		result := value
+
+		// Handle command substitution first if allowed
+		if allowCommands {
+			result = expandCommands(result)
+		}
+
+		// Then handle variable expansion using Go's built-in function
+		result = os.ExpandEnv(result)
+
+		expanded[key] = result
 	}
 
 	return expanded
 }
 
-// expandValue performs simple environment variable substitution
-func expandValue(value string, lookup map[string]string) string {
-	// Simple ${VAR} expansion only
-	varRegex := regexp.MustCompile(`\$\{([^}]+)\}`)
+// expandCommands handles $(command) substitution
+func expandCommands(value string) string {
+	// Simple regex for $(command) that doesn't interfere with ${var}
+	cmdRegex := regexp.MustCompile(`\$\(([^)]+)\)`)
 
-	return varRegex.ReplaceAllStringFunc(value, func(match string) string {
-		varName := match[2 : len(match)-1] // Remove ${ and }
-		if envValue, exists := lookup[varName]; exists {
-			return envValue
+	return cmdRegex.ReplaceAllStringFunc(value, func(match string) string {
+		command := match[2 : len(match)-1] // Remove $( and )
+
+		cmd := exec.Command("/bin/sh", "-c", command)
+		output, err := cmd.Output()
+		if err != nil {
+			return "" // Return empty on error
 		}
-		return "" // Return empty string for undefined variables
+
+		return strings.TrimSuffix(string(output), "\n")
 	})
 }

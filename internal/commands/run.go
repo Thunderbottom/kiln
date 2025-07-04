@@ -38,8 +38,11 @@ func (c *RunCmd) Run(globals *Globals) error {
 	if c.Expand {
 		if globals.Verbose {
 			fmt.Printf("Applying variable expansion\n")
+			if c.AllowCommands {
+				fmt.Printf("Command substitution enabled\n")
+			}
 		}
-		envVars = env.ExpandVariables(envVars)
+		envVars = env.ExpandVariables(envVars, c.AllowCommands)
 	}
 
 	if c.DryRun {
@@ -57,6 +60,8 @@ func (c *RunCmd) showDryRun(envVars map[string]string) error {
 		if c.AllowCommands {
 			fmt.Printf("Command substitution: enabled\n")
 		}
+	} else {
+		fmt.Printf("Variable expansion: disabled\n")
 	}
 
 	fmt.Printf("Environment variables (%d):\n", len(envVars))
