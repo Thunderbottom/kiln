@@ -7,6 +7,7 @@ import (
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
 	"github.com/thunderbottom/kiln/internal/crypto"
+	"github.com/thunderbottom/kiln/internal/utils"
 )
 
 type RekeyCmd struct {
@@ -48,7 +49,7 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 		return err
 	}
 
-	if _, err := os.Stat(envFilePath); os.IsNotExist(err) {
+	if !utils.FileExists(envFilePath) {
 		globals.Logger.Debug("file does not exist, skipping", "filename", c.File)
 		return nil
 	}

@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"sort"
-	"strings"
 
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/crypto"
@@ -28,7 +27,7 @@ const (
 
 // LoadEnvVars loads and decrypts environment variables from file
 func LoadEnvVars(ctx context.Context, configPath, fileName string) (map[string]string, error) {
-	cfg, ageManager, err := SetupEncryption(configPath)
+	cfg, ageManager, err := SetupEncryption(ctx, configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -43,8 +42,8 @@ func LoadEnvVars(ctx context.Context, configPath, fileName string) (map[string]s
 	if err != nil {
 		return nil, err
 	}
-	if err := CheckFileExists(envFilePath); err != nil {
-		return nil, err
+	if !utils.FileExists(envFilePath) {
+		return nil, fmt.Errorf("file not found: %s", envFilePath)
 	}
 
 	encrypted, err := os.ReadFile(envFilePath)
@@ -75,7 +74,7 @@ func LoadOrCreateEnvVars(ctx context.Context, configPath, fileName string) (map[
 
 // SaveEnvVars encrypts and saves environment variables to file
 func SaveEnvVars(ctx context.Context, configPath, fileName string, envVars map[string]string) error {
-	cfg, ageManager, err := SetupEncryption(configPath)
+	cfg, ageManager, err := SetupEncryption(ctx, configPath)
 	if err != nil {
 		return err
 	}
@@ -105,13 +104,12 @@ func SaveEnvVars(ctx context.Context, configPath, fileName string, envVars map[s
 }
 
 // SetupEncryption loads config and sets up encryption manager with private key
-func SetupEncryption(configPath string) (*config.Config, *crypto.AgeManager, error) {
+func SetupEncryption(ctx context.Context, configPath string) (*config.Config, *crypto.AgeManager, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
 	}
 
-	ctx := context.Background()
 	privateKey, err := utils.LoadPrivateKey(ctx)
 	if err != nil {
 		return nil, nil, fmt.Errorf("%s: %w", ErrLoadKey, err)
@@ -127,14 +125,6 @@ func SetupEncryption(configPath string) (*config.Config, *crypto.AgeManager, err
 	}
 
 	return cfg, ageManager, nil
-}
-
-// CheckFileExists checks if file exists and returns appropriate error
-func CheckFileExists(filePath string) error {
-	if _, err := os.Stat(filePath); os.IsNotExist(err) {
-		return fmt.Errorf("%s: %s", ErrFileNotFound, filePath)
-	}
-	return nil
 }
 
 // DecryptAndParse decrypts data and parses environment variables
@@ -166,39 +156,20 @@ func GetFileInfo(configPath, fileName string) (string, os.FileInfo, error) {
 }
 
 // ProcessEnvVars applies common processing to environment variables
-func ProcessEnvVars(envVars map[string]string, maskSensitive bool) map[string]string {
-	if !maskSensitive {
+func ProcessEnvVars(envVars map[string]string, config *config.Config) map[string]string {
+	if len(config.Security.MaskKeys) == 0 {
 		return envVars
 	}
 
 	processed := make(map[string]string)
 	for key, value := range envVars {
-		if IsSensitiveKey(key) {
-			value = MaskValue(value)
+		if config.ShouldMaskKey(key) {
+			processed[key] = config.MaskValue(value)
+		} else {
+			processed[key] = value
 		}
-		processed[key] = value
 	}
 	return processed
-}
-
-// IsSensitiveKey checks if a key contains sensitive information
-func IsSensitiveKey(key string) bool {
-	keyLower := strings.ToLower(key)
-	sensitivePatterns := []string{"password", "secret", "token", "key", "auth", "api"}
-	for _, pattern := range sensitivePatterns {
-		if strings.Contains(keyLower, pattern) {
-			return true
-		}
-	}
-	return false
-}
-
-// MaskValue masks sensitive values
-func MaskValue(value string) string {
-	if len(value) <= 4 {
-		return "****"
-	}
-	return value[:2] + "****" + value[len(value)-2:]
 }
 
 // SortedKeys returns sorted keys from environment variables map

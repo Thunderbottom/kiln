@@ -3,6 +3,7 @@ package env
 import (
 	"bufio"
 	"fmt"
+	"sort"
 	"strings"
 )
 
@@ -77,14 +78,7 @@ func FormatEnvFile(vars map[string]string) string {
 		keys = append(keys, key)
 	}
 
-	// Simple sort implementation
-	for i := 0; i < len(keys); i++ {
-		for j := i + 1; j < len(keys); j++ {
-			if keys[i] > keys[j] {
-				keys[i], keys[j] = keys[j], keys[i]
-			}
-		}
-	}
+	sort.Strings(keys)
 
 	for _, key := range keys {
 		value := vars[key]

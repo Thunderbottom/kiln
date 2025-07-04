@@ -60,6 +60,10 @@ func (c *InitCmd) initEnv(cfg *config.Config, globals *Globals) error {
 
 		globals.Logger.Info("generated new age key pair")
 		globals.Logger.Debug("generated age keys", "public key", publicKey, "private key", privateKeyFile)
+		globals.Logger.Info("to configure key masking, add to kiln.toml:",
+			"example", `[security]
+mask_keys = ["API_TOKEN", "SECRET_KEY"]
+show_chars = 4`)
 	}
 
 	file, err := cfg.GetEnvFile("default")

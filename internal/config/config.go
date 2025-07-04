@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
+	"github.com/thunderbottom/kiln/internal/crypto"
 )
 
 const (
@@ -19,6 +20,12 @@ const (
 type Config struct {
 	Recipients []string          `toml:"recipients"`
 	Files      map[string]string `toml:"files"`
+	Security   SecurityConfig    `toml:"security,omitempty"`
+}
+
+type SecurityConfig struct {
+	MaskKeys  []string `toml:"mask_keys,omitempty"`
+	ShowChars int      `toml:"show_chars,omitempty"`
 }
 
 // NewConfig creates a new configuration with defaults
@@ -27,6 +34,10 @@ func NewConfig() *Config {
 		Recipients: []string{},
 		Files: map[string]string{
 			"default": DefaultEnvFile,
+		},
+		Security: SecurityConfig{
+			MaskKeys:  []string{},
+			ShowChars: 4,
 		},
 	}
 }
@@ -64,21 +75,48 @@ func (c *Config) Save(path string) error {
 		}
 	}
 
-	file, err := os.Create(path)
+	// Create temporary file in same directory for renaming
+	tempFile, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp.*")
 	if err != nil {
-		return fmt.Errorf("failed to create config file: %v", err)
+		return fmt.Errorf("failed to create temporary file: %v", err)
 	}
-	defer file.Close()
+	tempPath := tempFile.Name()
 
-	encoder := toml.NewEncoder(file)
+	// Cleanup on failure
+	defer func() {
+		if tempFile != nil {
+			tempFile.Close()
+			os.Remove(tempPath)
+		}
+	}()
+
+	// Write config to temp file
+	encoder := toml.NewEncoder(tempFile)
 	if err := encoder.Encode(c); err != nil {
 		return fmt.Errorf("failed to encode config: %v", err)
 	}
 
-	if err := file.Chmod(0600); err != nil {
-		return fmt.Errorf("failed to set config file permissions: %v", err)
+	// Sync to disk
+	if err := tempFile.Sync(); err != nil {
+		return fmt.Errorf("failed to sync file: %v", err)
 	}
 
+	// Close before rename (required on Windows)
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temporary file: %v", err)
+	}
+
+	// Set permissions before rename
+	if err := os.Chmod(tempPath, 0600); err != nil {
+		return fmt.Errorf("failed to set file permissions: %v", err)
+	}
+
+	if err := os.Rename(tempPath, path); err != nil {
+		return fmt.Errorf("failed to rename temporary file: %v", err)
+	}
+
+	// Prevent cleanup
+	tempFile = nil
 	return nil
 }
 
@@ -89,17 +127,8 @@ func (c *Config) Validate() error {
 	}
 
 	for i, recipient := range c.Recipients {
-		recipient = strings.TrimSpace(recipient)
-		if recipient == "" {
-			return fmt.Errorf("recipient %d is empty", i+1)
-		}
-
-		if !strings.HasPrefix(recipient, "age1") {
-			return fmt.Errorf("recipient %d: invalid format (must start with 'age1')", i+1)
-		}
-
-		if len(recipient) != 62 {
-			return fmt.Errorf("recipient %d: invalid length", i+1)
+		if err := crypto.ValidatePublicKey(recipient); err != nil {
+			return fmt.Errorf("recipient %d: %w", i+1, err)
 		}
 	}
 
@@ -156,4 +185,27 @@ func Exists(path string) bool {
 	}
 	_, err := os.Stat(path)
 	return err == nil
+}
+
+// ShouldMaskKey checks if a key should be masked based on config
+func (c *Config) ShouldMaskKey(key string) bool {
+	for _, maskKey := range c.Security.MaskKeys {
+		if strings.EqualFold(key, maskKey) {
+			return true
+		}
+	}
+	return false
+}
+
+// MaskValue masks a value according to config settings
+func (c *Config) MaskValue(value string) string {
+	if c.Security.ShowChars <= 0 {
+		return strings.Repeat("*", len(value))
+	}
+
+	if len(value) <= c.Security.ShowChars {
+		return strings.Repeat("*", len(value))
+	}
+
+	return strings.Repeat("*", len(value)-c.Security.ShowChars) + value[len(value)-c.Security.ShowChars:]
 }
