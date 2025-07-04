@@ -1,12 +1,7 @@
 package main
 
 import (
-	"context"
-	"fmt"
-	"os"
-	"os/signal"
-	"syscall"
-
+	"github.com/alecthomas/kong"
 	"github.com/thunderbottom/kiln/internal/commands"
 )
 
@@ -16,70 +11,37 @@ var (
 	date    = "unknown"
 )
 
-func main() {
-	ctx, cancel := signal.NotifyContext(context.Background(),
-		os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
-	defer cancel()
+type CLI struct {
+	Config  string `short:"c" help:"Configuration file path" default:".kiln.yaml"`
+	Verbose bool   `short:"v" help:"Verbose output"`
 
-	if len(os.Args) < 2 {
-		printUsage()
-		os.Exit(1)
-	}
+	Init   commands.InitCmd   `cmd:"" help:"Initialize new kiln project"`
+	Edit   commands.EditCmd   `cmd:"" help:"Edit encrypted environment variables"`
+	Export commands.ExportCmd `cmd:"" help:"Export environment variables"`
+	Run    commands.RunCmd    `cmd:"" help:"Run command with encrypted environment"`
+	Set    commands.SetCmd    `cmd:"" help:"Set an environment variable"`
+	Get    commands.GetCmd    `cmd:"" help:"Get an environment variable"`
+	Rekey  commands.RekeyCmd  `cmd:"" help:"Rotate encryption keys"`
+	Status commands.StatusCmd `cmd:"" help:"Show project status"`
+	Verify commands.VerifyCmd `cmd:"" help:"Verify encrypted files"`
 
-	command := os.Args[1]
-	args := os.Args[2:]
-
-	switch command {
-	case "init":
-		if err := commands.Init(ctx, args); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "edit":
-		if err := commands.Edit(ctx, args); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "export":
-		if err := commands.Export(ctx, args); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "run":
-		if err := commands.Run(ctx, args); err != nil {
-			fmt.Fprintf(os.Stderr, "Error: %v\n", err)
-			os.Exit(1)
-		}
-	case "version", "-v", "--version":
-		fmt.Printf("kiln %s (commit: %s, built: %s)\n", version, commit, date)
-	case "help", "-h", "--help":
-		printUsage()
-	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\n", command)
-		printUsage()
-		os.Exit(1)
-	}
+	Version commands.VersionCmd `cmd:"" help:"Show version information"`
 }
 
-func printUsage() {
-	fmt.Print(`kiln - secure environment variable management tool
+func main() {
+	var cli CLI
+	ctx := kong.Parse(&cli,
+		kong.Name("kiln"),
+		kong.Description("Secure environment variable management tool"),
+		kong.Vars{"version": version},
+	)
 
-Usage: kiln <command> [flags]
+	// Create a globals struct that matches what commands expect
+	globals := &commands.Globals{
+		Config:  cli.Config,
+		Verbose: cli.Verbose,
+	}
 
-Commands:
-  init     Initialize new kiln project
-  edit     Edit encrypted environment variables
-  export   Export environment variables
-  run      Run command with encrypted environment
-  version  Show version information
-  help     Show this help message
-
-Examples:
-  kiln init
-  kiln edit
-  kiln export --format json
-  kiln run -- terraform plan
-
-Use 'kiln <command> -h' for command-specific help.
-`)
+	err := ctx.Run(globals)
+	ctx.FatalIfErrorf(err)
 }

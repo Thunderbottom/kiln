@@ -398,3 +398,9 @@ func SaveFile(filename string, data []byte) error {
 
 	return nil
 }
+
+// FileExists checks if a file exists
+func FileExists(filename string) bool {
+	_, err := os.Stat(filename)
+	return err == nil
+}
