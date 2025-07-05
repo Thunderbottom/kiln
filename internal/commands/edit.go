@@ -81,7 +81,7 @@ func (c *EditCmd) editAndSave(plaintext []byte, globals *Globals) error {
 		return fmt.Errorf("failed to stat temporary file: %w", err)
 	}
 
-	editorCmd := c.determineEditor()
+	editorCmd := c.getEditor()
 	if err := c.launchEditor(editorCmd, tempFile, globals); err != nil {
 		return fmt.Errorf("editor failed: %w", err)
 	}
@@ -198,7 +198,7 @@ func (c *EditCmd) writeToTempFile(filename string, data []byte) error {
 	return nil
 }
 
-func (c *EditCmd) determineEditor() string {
+func (c *EditCmd) getEditor() string {
 	if c.Editor != "" {
 		return c.Editor
 	}
