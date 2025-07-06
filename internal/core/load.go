@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/crypto"
@@ -44,20 +45,15 @@ func LoadVars(ctx context.Context, configPath, fileName, keyPath string) (map[st
 		return nil, fmt.Errorf("failed to read environment file: %w", err)
 	}
 
-	// Load private key (custom path or default)
-	var privateKey string
-	if keyPath != "" {
-		// Load from specific path
-		privateKey, err = utils.LoadPrivateKeyFromFile(ctx, utils.ExpandPath(keyPath))
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// Use default key loading
-		privateKey, err = utils.LoadPrivateKey(ctx)
-		if err != nil {
-			return nil, err
-		}
+	// Load private key
+	keyAbsPath, err := filepath.Abs(keyPath)
+	if err != nil {
+		return nil, err
+	}
+
+	privateKey, err := utils.LoadPrivateKey(keyAbsPath)
+	if err != nil {
+		return nil, err
 	}
 	defer utils.WipeString(privateKey)
 

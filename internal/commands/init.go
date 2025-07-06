@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"syscall"
 
@@ -20,7 +21,7 @@ type InitCmd struct {
 }
 
 type InitKeyCmd struct {
-	Path    string `help:"Path for private key" default:"~/.kiln/kiln.key"`
+	Path    string `help:"Path for private key" default:"~/.kiln/kiln.key" type:"path"`
 	Encrypt bool   `help:"Save key with passphrase protection"`
 	Force   bool   `help:"Overwrite existing key (dangerous!)"`
 }
@@ -33,7 +34,10 @@ type InitConfigCmd struct {
 
 // Run generates a new encryption key
 func (c *InitKeyCmd) Run(globals *Globals) error {
-	keyPath := utils.ExpandPath(c.Path)
+	keyPath, err := filepath.Abs(c.Path)
+	if err != nil {
+		return err
+	}
 
 	// Check if key already exists
 	if utils.FileExists(keyPath) && !c.Force {
@@ -177,7 +181,7 @@ func loadPublicKey(input string) (string, error) {
 		fmt.Printf("Private key at %s is passphrase-protected.\n", input)
 
 		// Decrypt the private key
-		decryptedKey, err := utils.DecryptPrivateKeyFromContent(content)
+		decryptedKey, err := utils.DecryptPrivateKey(content)
 		if err != nil {
 			return "", fmt.Errorf("failed to decrypt private key from %s: %w", input, err)
 		}

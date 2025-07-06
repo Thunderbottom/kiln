@@ -3,6 +3,7 @@ package core
 import (
 	"context"
 	"fmt"
+	"path/filepath"
 
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/crypto"
@@ -18,20 +19,15 @@ func SaveVars(ctx context.Context, configPath, fileName string, envVars map[stri
 		return err
 	}
 
-	// Load private key (custom path or default)
-	var privateKey string
-	if keyPath != "" {
-		// Load from specific path
-		privateKey, err = utils.LoadPrivateKeyFromFile(ctx, utils.ExpandPath(keyPath))
-		if err != nil {
-			return fmt.Errorf("failed to load private key from %s: %w", keyPath, err)
-		}
-	} else {
-		// Use default key loading
-		privateKey, err = utils.LoadPrivateKey(ctx)
-		if err != nil {
-			return fmt.Errorf("failed to load private key: %w", err)
-		}
+	// Load private key
+	keyAbsPath, err := filepath.Abs(keyPath)
+	if err != nil {
+		return err
+	}
+
+	privateKey, err := utils.LoadPrivateKey(keyAbsPath)
+	if err != nil {
+		return fmt.Errorf("failed to load private key from %s: %w", keyPath, err)
 	}
 	defer utils.WipeString(privateKey)
 

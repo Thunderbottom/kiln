@@ -7,7 +7,6 @@ import (
 	"sort"
 
 	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/env"
 )
 
 // GetFileInfo returns file information or error
@@ -79,14 +78,25 @@ func GetVar(ctx context.Context, configPath, fileName, key string) (string, erro
 }
 
 // ExportVars loads environment variables and optionally applies expansion
-func ExportVars(ctx context.Context, configPath, fileName string, expand, allowCommands bool) (map[string]string, error) {
+func ExportVars(ctx context.Context, configPath, fileName string, expand bool) (map[string]string, error) {
 	vars, err := LoadVars(ctx, configPath, fileName, "")
 	if err != nil {
 		return nil, err
 	}
 
 	if expand {
-		vars = env.ExpandVariables(vars, allowCommands)
+		expanded := make(map[string]string)
+
+		// Set up environment for expansion
+		for key, value := range vars {
+			expanded[key] = os.Expand(value, func(key string) string {
+				if val, exists := vars[key]; exists {
+					return val
+				}
+				return os.Getenv(key)
+			})
+		}
+		vars = expanded
 	}
 
 	return vars, nil

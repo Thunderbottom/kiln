@@ -16,7 +16,7 @@ import (
 type EditCmd struct {
 	File   string `short:"f" help:"Environment file to edit" default:"default"`
 	Editor string `help:"Editor to use"`
-	Key    string `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key"`
+	Key    string `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key" type:"path"`
 }
 
 func (c *EditCmd) Run(globals *Globals) error {

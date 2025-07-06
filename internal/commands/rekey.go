@@ -13,7 +13,7 @@ type RekeyCmd struct {
 	File         string   `short:"f" help:"Environment file to rekey"`
 	AddRecipient []string `help:"Add new recipient public keys"`
 	Force        bool     `help:"Force rekey without confirmation"`
-	Key          string   `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key"`
+	Key          string   `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key" type:"path"`
 }
 
 func (c *RekeyCmd) Run(globals *Globals) error {

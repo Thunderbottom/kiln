@@ -13,16 +13,15 @@ import (
 )
 
 type ExportCmd struct {
-	File          string `short:"f" help:"Environment file to export" default:"default"`
-	Format        string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
-	NoMask        bool   `help:"Disable masking sensitive values"`
-	Expand        bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
-	AllowCommands bool   `help:"Allow command substitution ($$(command) syntax)"`
+	File   string `short:"f" help:"Environment file to export" default:"default"`
+	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
+	NoMask bool   `help:"Disable masking sensitive values"`
+	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
-	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand, c.AllowCommands)
+	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand)
 	if err != nil {
 		return err
 	}

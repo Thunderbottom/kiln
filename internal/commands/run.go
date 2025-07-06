@@ -13,14 +13,13 @@ import (
 )
 
 type RunCmd struct {
-	File          string   `short:"f" help:"Environment file to use" default:"default"`
-	DryRun        bool     `help:"Show environment variables without running command"`
-	Timeout       string   `help:"Timeout for command execution"`
-	WorkDir       string   `help:"Working directory for command execution"`
-	Shell         bool     `help:"Run command through shell"`
-	Expand        bool     `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
-	AllowCommands bool     `help:"Allow command substitution ($$(command) syntax)"`
-	Command       []string `arg:"" help:"Command and arguments to run"`
+	File    string   `short:"f" help:"Environment file to use" default:"default"`
+	DryRun  bool     `help:"Show environment variables without running command"`
+	Timeout string   `help:"Timeout for command execution"`
+	WorkDir string   `help:"Working directory for command execution"`
+	Shell   bool     `help:"Run command through shell"`
+	Expand  bool     `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	Command []string `arg:"" help:"Command and arguments to run"`
 }
 
 func (c *RunCmd) Run(globals *Globals) error {
@@ -29,7 +28,7 @@ func (c *RunCmd) Run(globals *Globals) error {
 	}
 
 	ctx := globals.Context()
-	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand, c.AllowCommands)
+	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand)
 	if err != nil {
 		return err
 	}
