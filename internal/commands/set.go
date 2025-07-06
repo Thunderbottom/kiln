@@ -10,17 +10,10 @@ type SetCmd struct {
 
 func (c *SetCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
-	envVars, err := core.LoadOrCreateEnvVars(ctx, globals.Config, c.File)
-	if err != nil {
-		return err
-	}
-
-	envVars[c.Key] = c.Value
-	if err := core.SaveEnvVars(ctx, globals.Config, c.File, envVars); err != nil {
+	if err := core.SetVar(ctx, globals.Config, c.File, c.Key, c.Value); err != nil {
 		return err
 	}
 
 	globals.Logger.Info("environment variable set successfully", "key", c.Key, "file", c.File)
-
 	return nil
 }

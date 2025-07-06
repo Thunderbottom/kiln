@@ -29,7 +29,7 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
 	successful := 0
 	for _, fileName := range filesToVerify {
-		if err := core.ValidateEnvFile(ctx, globals.Config, fileName); err != nil {
+		if err := core.CheckFile(ctx, globals.Config, fileName); err != nil {
 			globals.Logger.Info(fmt.Sprintf("%v", err), "file", fileName)
 		} else {
 			globals.Logger.Info("ok", "file", fileName)

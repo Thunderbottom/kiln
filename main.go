@@ -25,7 +25,7 @@ type CLI struct {
 	Get     commands.GetCmd    `cmd:"" help:"Get an environment variable"`
 	Rekey   commands.RekeyCmd  `cmd:"" help:"Rotate encryption keys"`
 	Status  commands.StatusCmd `cmd:"" help:"Show project status"`
-	Verify  commands.VerifyCmd `cmd:"" help:"Verify the access and integrity for encrypted files"`
+	Verify  commands.VerifyCmd `cmd:"" help:"Verify encrypted files"`
 	Version kong.VersionFlag   `help:"Show version"`
 }
 
@@ -35,6 +35,7 @@ func main() {
 		kong.Name("kiln"),
 		kong.Description("Secure environment variable management tool"),
 		kong.Vars{"version": fmt.Sprintf("%s (%s, built %s)", version, commit, date)},
+		kong.UsageOnError(),
 	)
 
 	globals := commands.NewGlobals(cli.Config, cli.Verbose)

@@ -44,20 +44,18 @@ func NewConfig() *Config {
 
 // Load reads and validates a configuration file
 func Load(path string) (*Config, error) {
-	if path == "" {
-		path = DefaultConfigFile
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
 	}
 
 	var config Config
-	if _, err := toml.DecodeFile(path, &config); err != nil {
-		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("kiln configuration not found at %s", path)
-		}
-		return nil, fmt.Errorf("failed to parse config: %v", err)
+	if err := toml.Unmarshal(data, &config); err != nil {
+		return nil, err
 	}
 
-	if err := config.Validate(); err != nil {
-		return nil, fmt.Errorf("invalid configuration: %v", err)
+	if len(config.Recipients) == 0 {
+		return nil, fmt.Errorf("no recipients in config")
 	}
 
 	return &config, nil
@@ -65,59 +63,17 @@ func Load(path string) (*Config, error) {
 
 // Save writes the configuration to a file
 func (c *Config) Save(path string) error {
-	if path == "" {
-		path = DefaultConfigFile
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0755); err != nil {
+		return err
 	}
 
-	if dir := filepath.Dir(path); dir != "." {
-		if err := os.MkdirAll(dir, 0755); err != nil {
-			return fmt.Errorf("failed to create config directory: %v", err)
-		}
-	}
-
-	// Create temporary file in same directory for renaming
-	tempFile, err := os.CreateTemp(filepath.Dir(path), "."+filepath.Base(path)+".tmp.*")
+	data, err := toml.Marshal(c)
 	if err != nil {
-		return fmt.Errorf("failed to create temporary file: %v", err)
-	}
-	tempPath := tempFile.Name()
-
-	// Cleanup on failure
-	defer func() {
-		if tempFile != nil {
-			tempFile.Close()
-			os.Remove(tempPath)
-		}
-	}()
-
-	// Write config to temp file
-	encoder := toml.NewEncoder(tempFile)
-	if err := encoder.Encode(c); err != nil {
-		return fmt.Errorf("failed to encode config: %v", err)
+		return err
 	}
 
-	// Sync to disk
-	if err := tempFile.Sync(); err != nil {
-		return fmt.Errorf("failed to sync file: %v", err)
-	}
-
-	// Close before rename (required on Windows)
-	if err := tempFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temporary file: %v", err)
-	}
-
-	// Set permissions before rename
-	if err := os.Chmod(tempPath, 0600); err != nil {
-		return fmt.Errorf("failed to set file permissions: %v", err)
-	}
-
-	if err := os.Rename(tempPath, path); err != nil {
-		return fmt.Errorf("failed to rename temporary file: %v", err)
-	}
-
-	// Prevent cleanup
-	tempFile = nil
-	return nil
+	return os.WriteFile(path, data, 0600)
 }
 
 // Validate checks if the configuration is valid

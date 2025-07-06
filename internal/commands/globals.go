@@ -8,6 +8,10 @@ import (
 	"github.com/lmittmann/tint"
 )
 
+type contextKey string
+
+const loggerKey contextKey = "logger"
+
 // Globals contains global configuration shared across all commands
 type Globals struct {
 	Config string
@@ -43,5 +47,5 @@ func NewGlobals(config string, verbose bool) *Globals {
 
 // Context returns a context with the logger attached
 func (g *Globals) Context() context.Context {
-	return context.WithValue(context.Background(), "logger", g.Logger)
+	return context.WithValue(context.Background(), loggerKey, g.Logger)
 }

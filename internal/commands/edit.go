@@ -6,11 +6,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
-	"syscall"
 	"time"
 
-	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
 	"github.com/thunderbottom/kiln/internal/env"
 	"github.com/thunderbottom/kiln/internal/utils"
@@ -19,76 +16,55 @@ import (
 type EditCmd struct {
 	File   string `short:"f" help:"Environment file to edit" default:"default"`
 	Editor string `help:"Editor to use"`
+	Key    string `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key"`
 }
 
 func (c *EditCmd) Run(globals *Globals) error {
-	plaintext, err := c.loadOrCreateTemplate(globals)
+	ctx := globals.Context()
+
+	// Load existing vars or get empty map
+	vars, err := core.LoadVars(ctx, globals.Config, c.File, c.Key)
 	if err != nil {
 		return err
 	}
 
-	return c.editAndSave(plaintext, globals)
-}
-
-func (c *EditCmd) loadOrCreateTemplate(globals *Globals) ([]byte, error) {
-	// Try to load existing file
-	ctx := globals.Context()
-	envVars, err := core.LoadOrCreateEnvVars(ctx, globals.Config, c.File)
-	if err != nil {
-		return nil, err
-	}
-
-	// If we got variables, format them
-	if len(envVars) > 0 {
-		content := env.FormatEnvFile(envVars)
-		return []byte(content), nil
-	}
-
-	// Otherwise return template
-	return []byte(`# Environment Variables
+	// Format content for editing
+	var content []byte
+	if len(vars) > 0 {
+		content = []byte(env.FormatEnvFile(vars))
+	} else {
+		content = []byte(`# Environment Variables
 # Format: KEY=value
-DATABASE_URL=
-API_TOKEN=
-DEBUG=false
-`), nil
-}
+`)
+	}
 
-func (c *EditCmd) editAndSave(plaintext []byte, globals *Globals) error {
-	// Create temporary directory
-	tempDir, err := c.createTempDir()
+	// Create secure temp file
+	tempFile, err := c.createTempFile(content, globals)
 	if err != nil {
-		return fmt.Errorf("failed to create temporary directory: %w", err)
+		return err
 	}
 	defer func() {
-		// Clean up temporary directory and all contents
-		os.RemoveAll(tempDir)
-	}()
-
-	// Create temporary file in the directory
-	tempFile := filepath.Join(tempDir, "kiln-edit.env")
-	if err := c.writeToTempFile(tempFile, plaintext); err != nil {
-		return fmt.Errorf("failed to write to temporary file: %w", err)
-	}
-	defer func() {
-		// Wipe sensitive data from memory if file still exists
 		if data, err := os.ReadFile(tempFile); err == nil {
 			utils.WipeData(data)
 		}
+		_ = os.Remove(tempFile)
 	}()
 
+	// Get modification time before editing
 	beforeStat, err := os.Stat(tempFile)
 	if err != nil {
-		return fmt.Errorf("failed to stat temporary file: %w", err)
+		return fmt.Errorf("failed to stat temp file: %w", err)
 	}
 
-	editorCmd := c.getEditor()
-	if err := c.launchEditor(editorCmd, tempFile, globals); err != nil {
-		return fmt.Errorf("editor failed: %w", err)
+	// Launch editor
+	if err := c.launchEditor(tempFile, globals); err != nil {
+		return err
 	}
 
+	// Check if file was modified
 	afterStat, err := os.Stat(tempFile)
 	if err != nil {
-		return fmt.Errorf("failed to stat temporary file after editing: %w", err)
+		return fmt.Errorf("failed to stat temp file after editing: %w", err)
 	}
 
 	if !afterStat.ModTime().After(beforeStat.ModTime()) {
@@ -96,184 +72,90 @@ func (c *EditCmd) editAndSave(plaintext []byte, globals *Globals) error {
 		return nil
 	}
 
-	return c.saveChanges(tempFile, globals)
-}
-
-// createTempDir creates a temporary directory with secure permissions
-func (c *EditCmd) createTempDir() (string, error) {
-	// Get a base directory for temporary files
-	baseDir, err := c.getTempBase()
+	// Read and save changes
+	modified, err := os.ReadFile(tempFile)
 	if err != nil {
-		return "", err
+		return fmt.Errorf("failed to read modified content: %w", err)
+	}
+	defer utils.WipeData(modified)
+
+	newVars, err := env.ParseEnvFile(string(modified))
+	if err != nil {
+		return fmt.Errorf("invalid environment file format: %w", err)
 	}
 
-	// Create a unique directory name
-	dirName := fmt.Sprintf("kiln-edit-%d-%d", os.Getpid(), time.Now().UnixNano())
-	tempDir := filepath.Join(baseDir, dirName)
-
-	// Create directory with restricted permissions (owner only: 0700)
-	if err := os.Mkdir(tempDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create temporary directory: %w", err)
+	if err := core.SaveVars(ctx, globals.Config, c.File, newVars, c.Key); err != nil {
+		return fmt.Errorf("failed to save changes: %w", err)
 	}
 
-	// Verify the directory has the correct permissions on Unix-like systems
-	if runtime.GOOS != "windows" {
-		if err := c.verifyDirPermissions(tempDir); err != nil {
-			os.Remove(tempDir)
-			return "", err
-		}
-	}
-
-	return tempDir, nil
+	globals.Logger.Info("environment file updated", "file", c.File)
+	return nil
 }
 
-// getTempBase returns a base directory for temporary files
-func (c *EditCmd) getTempBase() (string, error) {
-	// Try user's home directory first for better security
+// createTempFile creates a secure temporary file with the given content
+func (c *EditCmd) createTempFile(content []byte, globals *Globals) (string, error) {
+	// Create temp file in secure location
+	tempDir := os.TempDir()
 	if home, err := os.UserHomeDir(); err == nil {
-		kilnTempDir := filepath.Join(home, ".kiln", "tmp")
-		if err := os.MkdirAll(kilnTempDir, 0700); err == nil {
-			return kilnTempDir, nil
+		kilnTemp := filepath.Join(home, ".kiln", "tmp")
+		if err := os.MkdirAll(kilnTemp, 0700); err == nil {
+			tempDir = kilnTemp
 		}
 	}
 
-	// Fall back to system temp, but create our own subdirectory
-	systemTemp := os.TempDir()
-
-	// Create a kiln-specific directory in system temp with secure permissions
-	// Use current user ID to prevent conflicts between users
-	var userSpecific string
-	if runtime.GOOS != "windows" {
-		userSpecific = fmt.Sprintf("kiln-%d", os.Getuid())
-	} else {
-		userSpecific = fmt.Sprintf("kiln-%d", os.Getpid())
-	}
-
-	kilnTempDir := filepath.Join(systemTemp, userSpecific)
-	if err := os.MkdirAll(kilnTempDir, 0700); err != nil {
-		return "", fmt.Errorf("failed to create temp base directory: %w", err)
-	}
-
-	return kilnTempDir, nil
-}
-
-// verifyDirPermissions verifies that a directory has the expected permissions
-func (c *EditCmd) verifyDirPermissions(dir string) error {
-	info, err := os.Stat(dir)
+	// Create temp file with secure permissions
+	tempFile, err := os.CreateTemp(tempDir, "kiln-edit-*.env")
 	if err != nil {
-		return err
+		return "", fmt.Errorf("failed to create temp file: %w", err)
+	}
+	defer func() {
+		if err := tempFile.Close(); err != nil {
+			globals.Logger.Debug("failed to close temp file", "error", err)
+		}
+	}()
+
+	// Set secure permissions and write content
+	if err := tempFile.Chmod(0600); err != nil {
+		_ = os.Remove(tempFile.Name())
+		return "", fmt.Errorf("failed to set permissions: %w", err)
 	}
 
-	// Verify permissions are 0700 (owner read/write/execute only)
-	perm := info.Mode().Perm()
-	expected := os.FileMode(0700)
-	if perm != expected {
-		return fmt.Errorf("directory permissions %v do not match expected %v", perm, expected)
+	if _, err := tempFile.Write(content); err != nil {
+		_ = os.Remove(tempFile.Name())
+		return "", fmt.Errorf("failed to write content: %w", err)
 	}
 
-	return nil
+	return tempFile.Name(), nil
 }
 
-// writeToTempFile writes data to a temporary file with secure permissions
-func (c *EditCmd) writeToTempFile(filename string, data []byte) error {
-	// Create file with secure permissions (owner read/write only: 0600)
-	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to create temporary file: %w", err)
-	}
-	defer file.Close()
-
-	// Write data
-	if _, err := file.Write(data); err != nil {
-		os.Remove(filename) // Clean up on write failure
-		return fmt.Errorf("failed to write to temporary file: %w", err)
-	}
-
-	// Sync to ensure data is written to disk before editor opens
-	if err := file.Sync(); err != nil {
-		os.Remove(filename)
-		return fmt.Errorf("failed to sync temporary file: %w", err)
-	}
-
-	return nil
-}
-
-func (c *EditCmd) getEditor() string {
+// launchEditor opens the specified editor with the temp file
+func (c *EditCmd) launchEditor(tempFile string, globals *Globals) error {
+	// Determine editor to use
+	var editor string
 	if c.Editor != "" {
-		return c.Editor
+		editor = c.Editor
+	} else if env := os.Getenv("EDITOR"); env != "" {
+		editor = env
+	} else {
+		return fmt.Errorf("no editor specified: use --editor flag or set EDITOR environment variable")
 	}
-	if editor := os.Getenv("EDITOR"); editor != "" {
-		return editor
-	}
-	// Use platform-appropriate defaults
-	if runtime.GOOS == "windows" {
-		return "notepad"
-	}
-	return "vi"
-}
 
-// launchEditor launches the editor with proper signal handling and timeout
-func (c *EditCmd) launchEditor(editor, tempFile string, globals *Globals) error {
-	// Create context with timeout to prevent hanging indefinitely
 	ctx, cancel := context.WithTimeout(globals.Context(), 30*time.Minute)
 	defer cancel()
 
-	// Create command with context for timeout support
 	cmd := exec.CommandContext(ctx, editor, tempFile)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	// Set process group for proper signal handling on Unix-like systems
-	if runtime.GOOS != "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{}
-	}
-
-	globals.Logger.Debug("launching editor", "editor", editor, "file", tempFile)
+	globals.Logger.Debug("launching editor", "editor", editor)
 
 	if err := cmd.Run(); err != nil {
-		// Check if it was a timeout
 		if ctx.Err() == context.DeadlineExceeded {
-			return fmt.Errorf("editor operation timed out after 30 minutes")
+			return fmt.Errorf("editor timed out after 30 minutes")
 		}
-
-		// Check for exit errors and handle them gracefully
-		if exitError, ok := err.(*exec.ExitError); ok {
-			if exitError.ExitCode() != 0 {
-				return fmt.Errorf("editor exited with code %d", exitError.ExitCode())
-			}
-		}
-		return err
+		return fmt.Errorf("editor failed: %w", err)
 	}
-
-	return nil
-}
-
-func (c *EditCmd) saveChanges(tempFile string, globals *Globals) error {
-	modifiedContent, err := os.ReadFile(tempFile)
-	if err != nil {
-		return fmt.Errorf("failed to read modified content: %w", err)
-	}
-
-	defer utils.WipeData(modifiedContent)
-
-	envVars, err := env.ParseEnvFile(string(modifiedContent))
-	if err != nil {
-		return fmt.Errorf("invalid environment file format: %w", err)
-	}
-
-	ctx := globals.Context()
-	if err := core.SaveEnvVars(ctx, globals.Config, c.File, envVars); err != nil {
-		return fmt.Errorf("failed to save environment file: %w", err)
-	}
-
-	cfg, _ := config.Load(globals.Config)
-	envFilePath, err := cfg.GetEnvFile(c.File)
-	if err != nil {
-		return err
-	}
-
-	globals.Logger.Info("environment file updated", "path", envFilePath)
 
 	return nil
 }

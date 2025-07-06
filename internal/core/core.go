@@ -7,143 +7,14 @@ import (
 	"sort"
 
 	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/crypto"
 	"github.com/thunderbottom/kiln/internal/env"
-	"github.com/thunderbottom/kiln/internal/utils"
 )
-
-// Common error messages
-const (
-	ErrConfigLoad   = "failed to load configuration"
-	ErrSetupCrypto  = "failed to setup encryption"
-	ErrLoadKey      = "failed to load private key"
-	ErrAddIdentity  = "failed to add identity"
-	ErrFileNotFound = "environment file not found"
-	ErrReadFile     = "failed to read environment file"
-	ErrDecrypt      = "failed to decrypt environment file"
-	ErrEncrypt      = "failed to encrypt content"
-	ErrSaveFile     = "failed to save environment file"
-)
-
-// LoadEnvVars loads and decrypts environment variables from file
-func LoadEnvVars(ctx context.Context, configPath, fileName string) (map[string]string, error) {
-	cfg, ageManager, err := SetupEncryption(ctx, configPath)
-	if err != nil {
-		return nil, err
-	}
-
-	select {
-	case <-ctx.Done():
-		return nil, ctx.Err()
-	default:
-	}
-
-	envFilePath, err := cfg.GetEnvFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-	if !utils.FileExists(envFilePath) {
-		return nil, fmt.Errorf("file not found: %s", envFilePath)
-	}
-
-	encrypted, err := os.ReadFile(envFilePath)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ErrReadFile, err)
-	}
-
-	return DecryptAndParse(ctx, ageManager, encrypted)
-}
-
-// LoadOrCreateEnvVars loads existing vars or returns empty map if file doesn't exist
-func LoadOrCreateEnvVars(ctx context.Context, configPath, fileName string) (map[string]string, error) {
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
-	}
-
-	envFilePath, err := cfg.GetEnvFile(fileName)
-	if err != nil {
-		return nil, err
-	}
-	if !utils.FileExists(envFilePath) {
-		return make(map[string]string), nil
-	}
-
-	return LoadEnvVars(ctx, configPath, fileName)
-}
-
-// SaveEnvVars encrypts and saves environment variables to file
-func SaveEnvVars(ctx context.Context, configPath, fileName string, envVars map[string]string) error {
-	cfg, ageManager, err := SetupEncryption(ctx, configPath)
-	if err != nil {
-		return err
-	}
-
-	select {
-	case <-ctx.Done():
-		return ctx.Err()
-	default:
-	}
-
-	content := env.FormatEnvFile(envVars)
-	encrypted, err := ageManager.Encrypt(ctx, []byte(content))
-	if err != nil {
-		return fmt.Errorf("%s: %w", ErrEncrypt, err)
-	}
-
-	envFilePath, err := cfg.GetEnvFile(fileName)
-	if err != nil {
-		return err
-	}
-
-	if err := utils.SaveFile(envFilePath, encrypted); err != nil {
-		return fmt.Errorf("%s: %w", ErrSaveFile, err)
-	}
-
-	return nil
-}
-
-// SetupEncryption loads config and sets up encryption manager with private key
-func SetupEncryption(ctx context.Context, configPath string) (*config.Config, *crypto.AgeManager, error) {
-	cfg, err := config.Load(configPath)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
-	}
-
-	privateKey, err := utils.LoadPrivateKey(ctx)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", ErrLoadKey, err)
-	}
-
-	ageManager, err := crypto.NewAgeManager(cfg.Recipients)
-	if err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", ErrSetupCrypto, err)
-	}
-
-	if err := ageManager.AddIdentity(privateKey); err != nil {
-		return nil, nil, fmt.Errorf("%s: %w", ErrAddIdentity, err)
-	}
-
-	return cfg, ageManager, nil
-}
-
-// DecryptAndParse decrypts data and parses environment variables
-func DecryptAndParse(ctx context.Context, ageManager *crypto.AgeManager, encrypted []byte) (map[string]string, error) {
-	plaintext, err := ageManager.Decrypt(ctx, encrypted)
-	if err != nil {
-		return nil, fmt.Errorf("%s: %w", ErrDecrypt, err)
-	}
-
-	defer utils.WipeData(plaintext)
-
-	return env.ParseEnvFile(string(plaintext))
-}
 
 // GetFileInfo returns file information or error
 func GetFileInfo(configPath, fileName string) (string, os.FileInfo, error) {
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		return "", nil, fmt.Errorf("%s: %w", ErrConfigLoad, err)
+		return "", nil, fmt.Errorf("failed to load configuration: %w", err)
 	}
 
 	filePath, err := cfg.GetEnvFile(fileName)
@@ -155,8 +26,8 @@ func GetFileInfo(configPath, fileName string) (string, os.FileInfo, error) {
 	return filePath, info, err
 }
 
-// ProcessEnvVars applies common processing to environment variables
-func ProcessEnvVars(envVars map[string]string, config *config.Config) map[string]string {
+// MaskVars applies masking to sensitive environment variables
+func MaskVars(envVars map[string]string, config *config.Config) map[string]string {
 	if len(config.Security.MaskKeys) == 0 {
 		return envVars
 	}
@@ -182,8 +53,47 @@ func SortedKeys(envVars map[string]string) []string {
 	return keys
 }
 
-// ValidateEnvFile validates that a file can be decrypted and parsed
-func ValidateEnvFile(ctx context.Context, configPath, fileName string) error {
-	_, err := LoadEnvVars(ctx, configPath, fileName)
+// SetVar sets a single environment variable in the specified file
+func SetVar(ctx context.Context, configPath, fileName, key, value string) error {
+	vars, err := LoadVars(ctx, configPath, fileName, "")
+	if err != nil {
+		return err
+	}
+	vars[key] = value
+	return SaveVars(ctx, configPath, fileName, vars, "")
+}
+
+// GetVar retrieves a single environment variable from the specified file
+func GetVar(ctx context.Context, configPath, fileName, key string) (string, error) {
+	vars, err := LoadVars(ctx, configPath, fileName, "")
+	if err != nil {
+		return "", err
+	}
+
+	value, exists := vars[key]
+	if !exists {
+		return "", fmt.Errorf("variable %s not found", key)
+	}
+
+	return value, nil
+}
+
+// ExportVars loads environment variables and optionally applies expansion
+func ExportVars(ctx context.Context, configPath, fileName string, expand, allowCommands bool) (map[string]string, error) {
+	vars, err := LoadVars(ctx, configPath, fileName, "")
+	if err != nil {
+		return nil, err
+	}
+
+	if expand {
+		vars = env.ExpandVariables(vars, allowCommands)
+	}
+
+	return vars, nil
+}
+
+// CheckFile validates that a file can be decrypted and parsed
+func CheckFile(ctx context.Context, configPath, fileName string) error {
+	_, err := LoadVars(ctx, configPath, fileName, "")
 	return err
 }

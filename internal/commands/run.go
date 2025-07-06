@@ -5,13 +5,11 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"runtime"
 	"strings"
 	"syscall"
 	"time"
 
 	"github.com/thunderbottom/kiln/internal/core"
-	"github.com/thunderbottom/kiln/internal/env"
 )
 
 type RunCmd struct {
@@ -31,18 +29,9 @@ func (c *RunCmd) Run(globals *Globals) error {
 	}
 
 	ctx := globals.Context()
-	envVars, err := core.LoadEnvVars(ctx, globals.Config, c.File)
+	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand, c.AllowCommands)
 	if err != nil {
 		return err
-	}
-
-	// Apply variable expansion if enabled
-	if c.Expand {
-		globals.Logger.Debug("applying variable expansion")
-		if c.AllowCommands {
-			globals.Logger.Debug("command substitution enabled")
-		}
-		envVars = env.ExpandVariables(envVars, c.AllowCommands)
 	}
 
 	if c.DryRun {
@@ -83,13 +72,6 @@ func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) err
 		cmd = exec.CommandContext(ctx, c.Command[0], c.Command[1:]...)
 	}
 
-	// Set up process group to properly kill child processes on Unix-like systems
-	if runtime.GOOS != "windows" {
-		cmd.SysProcAttr = &syscall.SysProcAttr{
-			Setpgid: true,
-		}
-	}
-
 	cmd.Env = os.Environ()
 	for key, value := range envVars {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
@@ -108,48 +90,15 @@ func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) err
 		globals.Logger.Debug("variable expansion applied", "count", len(envVars))
 	}
 
-	// Start the process
-	if err := cmd.Start(); err != nil {
-		return fmt.Errorf("command failed to start: %w", err)
-	}
-
-	// Create a channel to receive the Wait() result
-	waitCh := make(chan error, 1)
-	go func() {
-		waitCh <- cmd.Wait()
-	}()
-
-	// Wait for either completion or timeout
-	select {
-	case err := <-waitCh:
-		// Process completed normally
-		if err != nil {
-			if exitError, ok := err.(*exec.ExitError); ok {
-				if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-					os.Exit(status.ExitStatus())
-				}
-			}
-			return fmt.Errorf("command failed: %w", err)
-		}
-		return nil
-
-	case <-ctx.Done():
-		// Context was cancelled (timeout)
-		if runtime.GOOS != "windows" {
-			// Kill the entire process group
-			if cmd.Process != nil {
-				syscall.Kill(-cmd.Process.Pid, syscall.SIGKILL)
-			}
-		} else {
-			// On Windows, just kill the main process
-			if cmd.Process != nil {
-				cmd.Process.Kill()
+	err := cmd.Run()
+	if err != nil {
+		if exitError, ok := err.(*exec.ExitError); ok {
+			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+				os.Exit(status.ExitStatus())
 			}
 		}
-
-		// Wait for the goroutine to finish
-		<-waitCh
-
-		return fmt.Errorf("command timed out")
+		return fmt.Errorf("command failed: %w", err)
 	}
+
+	return nil
 }

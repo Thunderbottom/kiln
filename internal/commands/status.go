@@ -41,8 +41,7 @@ func (c *StatusCmd) showFileStatus(globals *Globals, fileName string) error {
 		return err
 	}
 
-	modified := fmt.Sprintf("%s", info.ModTime().
-		Format("2006-01-02 15:04:05"))
+	modified := info.ModTime().Format("2006-01-02 15:04:05")
 	globals.Logger.Info("file metadata", "file", fileName,
 		"path", filePath, "modified", modified,
 		"size", fmt.Sprintf("%.2f KB", float64(info.Size())/1024.0))

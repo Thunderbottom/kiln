@@ -10,7 +10,6 @@ import (
 
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
-	"github.com/thunderbottom/kiln/internal/env"
 )
 
 type ExportCmd struct {
@@ -23,29 +22,18 @@ type ExportCmd struct {
 
 func (c *ExportCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
-	envVars, err := core.LoadEnvVars(ctx, globals.Config, c.File)
+	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand, c.AllowCommands)
 	if err != nil {
 		return err
 	}
 
-	// Apply variable expansion if enabled
-	if c.Expand {
-		globals.Logger.Debug("applying variable expansion")
-		if c.AllowCommands {
-			globals.Logger.Debug("command substitution enabled")
-		}
-		envVars = env.ExpandVariables(envVars, c.AllowCommands)
-	}
-
-	// Load config for masking
-	cfg, err := config.Load(globals.Config)
-	if err != nil {
-		return fmt.Errorf("failed to load config for masking: %w", err)
-	}
-
 	// Apply masking unless disabled
 	if !c.NoMask {
-		envVars = core.ProcessEnvVars(envVars, cfg)
+		cfg, err := config.Load(globals.Config)
+		if err != nil {
+			return fmt.Errorf("failed to load config for masking: %w", err)
+		}
+		envVars = core.MaskVars(envVars, cfg)
 	}
 
 	switch c.Format {
@@ -61,7 +49,12 @@ func (c *ExportCmd) Run(globals *Globals) error {
 		return encoder.Encode(envVars)
 	case "yaml":
 		encoder := yaml.NewEncoder(os.Stdout)
-		defer encoder.Close()
+		defer func() {
+			if err := encoder.Close(); err != nil {
+				globals.Logger.Debug("failed to close yaml encoder", "error", err)
+			}
+		}()
+
 		return encoder.Encode(envVars)
 	}
 	return nil

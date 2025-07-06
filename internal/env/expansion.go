@@ -13,10 +13,9 @@ func ExpandVariables(envVars map[string]string, allowCommands bool) map[string]s
 
 	// Set up environment for expansion
 	for key, value := range envVars {
-		os.Setenv(key, value)
+		_ = os.Setenv(key, value)
 	}
 
-	// Expand each variable
 	for key, value := range envVars {
 		result := value
 
@@ -34,18 +33,21 @@ func ExpandVariables(envVars map[string]string, allowCommands bool) map[string]s
 	return expanded
 }
 
-// expandCommands handles $(command) substitution
+// expandCommands handles $(command) substitution.
+// This is dangerous and should be used with extreme caution
+// by the end user!
 func expandCommands(value string) string {
-	// Simple regex for $(command) that doesn't interfere with ${var}
 	cmdRegex := regexp.MustCompile(`\$\(([^)]+)\)`)
 
 	return cmdRegex.ReplaceAllStringFunc(value, func(match string) string {
-		command := match[2 : len(match)-1] // Remove $( and )
+		// Remove $( and )
+		command := match[2 : len(match)-1]
 
 		cmd := exec.Command("/bin/sh", "-c", command)
 		output, err := cmd.Output()
 		if err != nil {
-			return "" // Return empty on error
+			// Return an empty output
+			return ""
 		}
 
 		return strings.TrimSuffix(string(output), "\n")

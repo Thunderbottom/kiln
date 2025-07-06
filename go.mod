@@ -7,6 +7,7 @@ require (
 	github.com/BurntSushi/toml v1.5.0
 	github.com/alecthomas/kong v1.12.0
 	github.com/lmittmann/tint v1.1.2
+	golang.org/x/term v0.28.0
 	gopkg.in/yaml.v3 v3.0.1
 )
 

@@ -16,14 +16,9 @@ type GetCmd struct {
 
 func (c *GetCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
-	envVars, err := core.LoadEnvVars(ctx, globals.Config, c.File)
+	value, err := core.GetVar(ctx, globals.Config, c.File, c.Key)
 	if err != nil {
 		return err
-	}
-
-	value, exists := envVars[c.Key]
-	if !exists {
-		return fmt.Errorf("variable %s not found", c.Key)
 	}
 
 	switch c.Format {

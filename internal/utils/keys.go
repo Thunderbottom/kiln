@@ -3,84 +3,82 @@ package utils
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
+	"syscall"
+
+	"filippo.io/age"
+	"golang.org/x/term"
 )
 
 // LoadPrivateKey attempts to load the private key from common locations
 func LoadPrivateKey(ctx context.Context) (string, error) {
-	// Try environment variable first
-	if key := os.Getenv("KILN_PRIVATE_KEY"); key != "" {
-		key = strings.TrimSpace(key)
-		if key != "" {
-			return key, nil
-		}
-	}
-
-	// Try environment variable pointing to file
-	if keyFile := os.Getenv("KILN_PRIVATE_KEY_FILE"); keyFile != "" {
-		keyFile = ExpandPath(keyFile)
-		data, err := readFileWithContext(ctx, keyFile)
+	keyPath := os.Getenv("KILN_PRIVATE_KEY_FILE")
+	if keyPath == "" {
+		home, err := os.UserHomeDir()
 		if err != nil {
-			return "", fmt.Errorf("failed to read private key file %s: %w", keyFile, err)
+			return "", fmt.Errorf("failed to get home directory: %w", err)
 		}
-
-		key := strings.TrimSpace(string(data))
-		WipeData(data) // Clear file data
-		if key != "" {
-			return key, nil
-		}
+		keyPath = filepath.Join(home, ".kiln", "kiln.key")
 	}
 
-	// Try common file locations
-	locations := getKeyLocations()
-	for _, location := range locations {
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		default:
-		}
-
-		data, err := readFileWithContext(ctx, location)
-		if err == nil {
-			key := strings.TrimSpace(string(data))
-			WipeData(data) // Clear file data
-			if key != "" {
-				return key, nil
-			}
-		}
-	}
-
-	return "", fmt.Errorf(`private key not found
-
-Searched locations:
-  Environment variable: KILN_PRIVATE_KEY
-  Environment file: KILN_PRIVATE_KEY_FILE
-  Files: %s
-
-Solutions:
-  1. Set KILN_PRIVATE_KEY environment variable with your private key
-  2. Set KILN_PRIVATE_KEY_FILE to point to your key file
-  3. Place your private key in one of the searched locations
-  4. Run 'kiln init' to generate a new key pair`, strings.Join(locations, ", "))
+	return loadPrivateKeyFromFile(ctx, keyPath)
 }
 
-// getKeyLocations returns common locations to search for private keys
-func getKeyLocations() []string {
-	locations := []string{
-		"kiln.key",
-		".kiln.key",
+// loadPrivateKeyFromFile loads a private key from a file, handling encryption if needed
+func loadPrivateKeyFromFile(ctx context.Context, keyFile string) (string, error) {
+	data, err := readFileWithContext(ctx, keyFile)
+	if err != nil {
+		return "", fmt.Errorf("failed to read private key file %s: %w", keyFile, err)
+	}
+	defer WipeData(data)
+
+	key := strings.TrimSpace(string(data))
+	if key == "" {
+		return "", fmt.Errorf("private key file %s is empty", keyFile)
 	}
 
-	if home, err := os.UserHomeDir(); err == nil {
-		locations = append(locations,
-			filepath.Join(home, ".config", "kiln", "kiln.key"),
-			filepath.Join(home, ".kiln", "kiln.key"),
-		)
+	// Check if it's an age-encrypted file (passphrase-protected identity file)
+	if strings.Contains(key, "age-encryption.org/v1") {
+		// This is a passphrase-encrypted identity file - decrypt it
+		fmt.Printf("Private key at %s is passphrase-protected.\n", keyFile)
+		return decryptPrivateKey(key)
 	}
 
-	return locations
+	// Plain private key
+	return key, nil
+}
+
+// decryptPrivateKey decrypts an age-encrypted private key
+func decryptPrivateKey(encryptedKey string) (string, error) {
+	fmt.Print("Enter passphrase: ")
+	passphrase, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		return "", fmt.Errorf("failed to read passphrase: %w", err)
+	}
+	defer WipeData(passphrase)
+
+	identity, err := age.NewScryptIdentity(string(passphrase))
+	if err != nil {
+		return "", fmt.Errorf("failed to create scrypt identity: %w", err)
+	}
+
+	reader := strings.NewReader(encryptedKey)
+	r, err := age.Decrypt(reader, identity)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt private key: %w", err)
+	}
+
+	decrypted, err := io.ReadAll(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to read decrypted private key: %w", err)
+	}
+	defer WipeData(decrypted)
+
+	return string(decrypted), nil
 }
 
 // readFileWithContext reads a file with context cancellation support
@@ -126,84 +124,36 @@ func ExpandPath(path string) string {
 
 // SavePrivateKey saves a private key to a file with secure permissions
 func SavePrivateKey(privateKey, filename string) error {
-	// Create directory if needed
-	if dir := filepath.Dir(filename); dir != "." {
-		if err := os.MkdirAll(dir, 0700); err != nil {
-			return fmt.Errorf("failed to create directory: %w", err)
-		}
+	dir := filepath.Dir(filename)
+	if err := os.MkdirAll(dir, 0700); err != nil {
+		return err
 	}
 
-	// Create file with restrictive permissions
-	file, err := os.OpenFile(filename, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0600)
-	if err != nil {
-		return fmt.Errorf("failed to create private key file: %w", err)
-	}
-	defer file.Close()
-
-	// Write key with newline
-	if _, err := file.WriteString(privateKey + "\n"); err != nil {
-		os.Remove(filename) // Clean up on write failure
-		return fmt.Errorf("failed to write private key: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(filename, []byte(privateKey+"\n"), 0600)
 }
 
 // SaveFile writes data to a file with secure permissions
 func SaveFile(filename string, data []byte) error {
 	dir := filepath.Dir(filename)
 	if err := os.MkdirAll(dir, 0700); err != nil {
-		return fmt.Errorf("failed to create directory: %w", err)
+		return err
 	}
 
-	// Create temporary file in the same directory
-	tmpFile, err := os.CreateTemp(dir, ".tmp-"+filepath.Base(filename)+"-")
-	if err != nil {
-		return fmt.Errorf("failed to create temporary file: %w", err)
-	}
-	tmpPath := tmpFile.Name()
-
-	// Cleanup on failure
-	defer func() {
-		if tmpFile != nil {
-			tmpFile.Close()
-			os.Remove(tmpPath)
-		}
-	}()
-
-	// Set permissions before writing
-	if err := tmpFile.Chmod(0600); err != nil {
-		return fmt.Errorf("failed to set file permissions: %w", err)
-	}
-
-	// Write data
-	if _, err := tmpFile.Write(data); err != nil {
-		return fmt.Errorf("failed to write data: %w", err)
-	}
-
-	// Sync to disk
-	if err := tmpFile.Sync(); err != nil {
-		return fmt.Errorf("failed to sync file: %w", err)
-	}
-
-	// Close the file
-	if err := tmpFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temporary file: %w", err)
-	}
-	// Prevent cleanup
-	tmpFile = nil
-
-	// Atomic rename
-	if err := os.Rename(tmpPath, filename); err != nil {
-		os.Remove(tmpPath)
-		return fmt.Errorf("failed to rename temporary file: %w", err)
-	}
-
-	return nil
+	return os.WriteFile(filename, data, 0600)
 }
 
 // FileExists checks if a file exists
 func FileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
+}
+
+// DecryptPrivateKeyFromContent decrypts a passphrase-encrypted private key
+func DecryptPrivateKeyFromContent(encryptedContent string) (string, error) {
+	return decryptPrivateKey(encryptedContent)
+}
+
+// LoadPrivateKeyFromFile loads a private key from a specific file path
+func LoadPrivateKeyFromFile(ctx context.Context, keyFile string) (string, error) {
+	return loadPrivateKeyFromFile(ctx, keyFile)
 }

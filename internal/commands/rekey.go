@@ -2,7 +2,6 @@ package commands
 
 import (
 	"fmt"
-	"os"
 
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
@@ -14,6 +13,7 @@ type RekeyCmd struct {
 	File         string   `short:"f" help:"Environment file to rekey"`
 	AddRecipient []string `help:"Add new recipient public keys"`
 	Force        bool     `help:"Force rekey without confirmation"`
+	Key          string   `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key"`
 }
 
 func (c *RekeyCmd) Run(globals *Globals) error {
@@ -26,9 +26,7 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("failed to load configuration: %w", err)
 	}
 
-	originalCount := len(cfg.Recipients)
-
-	// Validate and add new recipients
+	// Validate new recipients from CLI
 	for _, recipient := range c.AddRecipient {
 		if err := crypto.ValidatePublicKey(recipient); err != nil {
 			return fmt.Errorf("invalid recipient key %s: %w", recipient, err)
@@ -36,14 +34,8 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		cfg.AddRecipient(recipient)
 	}
 
-	if len(cfg.Recipients) == originalCount {
-		return fmt.Errorf("no new recipients to add")
-	}
-
-	return c.rekeyFile(cfg, globals)
-}
-
-func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
+	// Check if we can currently decrypt the file
+	ctx := globals.Context()
 	envFilePath, err := cfg.GetEnvFile(c.File)
 	if err != nil {
 		return err
@@ -54,36 +46,23 @@ func (c *RekeyCmd) rekeyFile(cfg *config.Config, globals *Globals) error {
 		return nil
 	}
 
-	// Load existing environment variables using old recipients
-	oldRecipients := cfg.Recipients[:len(cfg.Recipients)-len(c.AddRecipient)]
-	oldCfg := *cfg
-	oldCfg.Recipients = oldRecipients
-
-	// Save old config temporarily to load with old recipients
-	tempConfig := globals.Config + ".tmp"
-	if err := oldCfg.Save(tempConfig); err != nil {
-		return fmt.Errorf("failed to save temporary config: %w", err)
+	// Try to load the file with current key
+	_, loadErr := core.LoadVars(ctx, globals.Config, c.File, c.Key)
+	if loadErr != nil {
+		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", loadErr)
 	}
-	defer os.Remove(tempConfig)
 
-	ctx := globals.Context()
-	// Load environment variables with old configuration
-	envVars, err := core.LoadEnvVars(ctx, tempConfig, c.File)
+	// Re-encrypt with all recipients in config
+	envVars, err := core.LoadVars(ctx, globals.Config, c.File, c.Key)
 	if err != nil {
-		return fmt.Errorf("failed to load with old keys: %w", err)
+		return fmt.Errorf("failed to load environment variables: %w", err)
 	}
 
-	// Save configuration with new recipients
-	if err := cfg.Save(globals.Config); err != nil {
-		return fmt.Errorf("failed to save updated config: %w", err)
+	// Save with updated recipient list
+	if err := core.SaveVars(ctx, globals.Config, c.File, envVars, c.Key); err != nil {
+		return fmt.Errorf("failed to save with updated recipients: %w", err)
 	}
 
-	// Save environment variables with new recipients
-	if err := core.SaveEnvVars(ctx, globals.Config, c.File, envVars); err != nil {
-		return fmt.Errorf("failed to save with new keys: %w", err)
-	}
-
-	globals.Logger.Info("successfully rekeyed file", "file", c.File, "recipients", len(c.AddRecipient))
-
+	globals.Logger.Info("successfully rekeyed file", "file", c.File, "total_recipients", len(cfg.Recipients))
 	return nil
 }

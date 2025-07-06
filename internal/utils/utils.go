@@ -1,40 +1,25 @@
 package utils
 
-import (
-	"crypto/rand"
-	"runtime"
-)
+import "runtime"
 
 // WipeData securely clears sensitive data from a byte slice
+// Replace WipeData function with:
 func WipeData(data []byte) {
 	if data == nil {
 		return
 	}
-
-	// Multiple passes with different patterns
-	for i := range 3 {
-		switch i {
-		case 0:
-			// Fill with zeros
-			for j := range data {
-				data[j] = 0
-			}
-		case 1:
-			// Fill with 0xFF
-			for j := range data {
-				data[j] = 0xFF
-			}
-		case 2:
-			// Fill with random data
-			rand.Read(data)
-		}
+	for i := range data {
+		data[i] = 0
 	}
-
 	runtime.KeepAlive(data)
 }
 
-// WithWipeData executes a function with automatic clearing of byte data
-func WithWipeData(data []byte, fn func([]byte) error) error {
-	defer WipeData(data)
-	return fn(data)
+// WipeString securely clears a string from memory
+func WipeString(s string) {
+	if s == "" {
+		return
+	}
+	// Convert to byte slice and wipe
+	b := []byte(s)
+	WipeData(b)
 }

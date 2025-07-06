@@ -1,101 +1,195 @@
 package commands
 
 import (
-	"context"
+	"bytes"
 	"fmt"
 	"os"
-	"path/filepath"
+	"strings"
+	"syscall"
 
+	"filippo.io/age"
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/crypto"
 	"github.com/thunderbottom/kiln/internal/utils"
+	"golang.org/x/term"
 )
 
 type InitCmd struct {
-	From      string `help:"Use existing public key"`
-	KeyOutput string `help:"Directory to save private key" default:"."`
-	Force     bool   `help:"Overwrite existing configuration"`
+	Key    *InitKeyCmd    `cmd:"" help:"Generate encryption key"`
+	Config *InitConfigCmd `cmd:"" help:"Generate configuration file"`
 }
 
-func (c *InitCmd) Run(globals *Globals) error {
-	if !c.Force && config.Exists(globals.Config) {
-		return fmt.Errorf("kiln project already exists at %s", globals.Config)
-	}
-
-	cfg := config.NewConfig()
-	return c.initEnv(cfg, globals)
+type InitKeyCmd struct {
+	Path    string `help:"Path for private key" default:"~/.kiln/kiln.key"`
+	Encrypt bool   `help:"Save key with passphrase protection"`
+	Force   bool   `help:"Overwrite existing key (dangerous!)"`
 }
 
-func (c *InitCmd) initEnv(cfg *config.Config, globals *Globals) error {
-	if c.From != "" {
-		if err := crypto.ValidatePublicKey(c.From); err != nil {
-			return fmt.Errorf("invalid public key: %w", err)
-		}
+type InitConfigCmd struct {
+	Path  string   `help:"Path for config file" default:"kiln.toml"`
+	Key   []string `help:"Path to public key file(s) or public key strings" required:""`
+	Force bool     `help:"Overwrite existing config"`
+}
 
-		cfg.AddRecipient(c.From)
-		if err := cfg.Save(globals.Config); err != nil {
-			return fmt.Errorf("failed to save configuration: %w", err)
-		}
-	} else {
-		privateKey, publicKey, err := crypto.GenerateKeyPair()
-		if err != nil {
-			return fmt.Errorf("failed to generate key pair: %w", err)
-		}
+// Run generates a new encryption key
+func (c *InitKeyCmd) Run(globals *Globals) error {
+	keyPath := utils.ExpandPath(c.Path)
 
-		cfg.AddRecipient(publicKey)
-
-		keyDir := utils.ExpandPath(c.KeyOutput)
-		if err := os.MkdirAll(keyDir, 0700); err != nil {
-			return fmt.Errorf("failed to create key directory: %w", err)
-		}
-
-		privateKeyFile := filepath.Join(keyDir, "kiln.key")
-		if err := utils.SavePrivateKey(privateKey, privateKeyFile); err != nil {
-			return fmt.Errorf("failed to save private key: %w", err)
-		}
-
-		if err := cfg.Save(globals.Config); err != nil {
-			return fmt.Errorf("failed to save configuration: %w", err)
-		}
-
-		globals.Logger.Info("generated new age key pair")
-		globals.Logger.Debug("generated age keys", "public key", publicKey, "private key", privateKeyFile)
-		globals.Logger.Info("to configure key masking, add to kiln.toml:",
-			"example", `[security]
-mask_keys = ["API_TOKEN", "SECRET_KEY"]
-show_chars = 4`)
+	// Check if key already exists
+	if utils.FileExists(keyPath) && !c.Force {
+		return fmt.Errorf("private key already exists at %s. Overwriting will make existing encrypted files unreadable. Use --force to overwrite (NOT RECOMMENDED)", keyPath)
 	}
 
-	file, err := cfg.GetEnvFile("default")
+	// Generate key pair
+	identity, err := age.GenerateX25519Identity()
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to generate key pair: %w", err)
 	}
 
-	if err := c.createEmptyEnvFile(file, cfg.Recipients); err != nil {
-		globals.Logger.Warn("failed to create empty env file", "error", err)
+	privateKey := identity.String()
+	publicKey := identity.Recipient().String()
+
+	// Handle encryption for private key
+	if c.Encrypt {
+		encryptedKey, err := encryptPrivateKey(privateKey)
+		if err != nil {
+			return fmt.Errorf("failed to encrypt private key: %w", err)
+		}
+		privateKey = encryptedKey
+		utils.WipeString(identity.String())
 	}
+
+	// Save private key
+	if err := utils.SavePrivateKey(privateKey, keyPath); err != nil {
+		return fmt.Errorf("failed to save private key: %w", err)
+	}
+
+	if !c.Encrypt {
+		globals.Logger.Warn(`private key is NOT password protected
+Consider regenerating the key with password protection or use external encryption`)
+	}
+
+	globals.Logger.Info("key pair generated", "private", keyPath, "encrypted", c.Encrypt)
+	fmt.Printf("\nage public key: %s\n", publicKey)
 
 	return nil
 }
 
-func (c *InitCmd) createEmptyEnvFile(envFile string, recipients []string) error {
-	ageManager, err := crypto.NewAgeManager(recipients)
-	if err != nil {
-		return err
+// Run generates a new configuration file
+func (c *InitConfigCmd) Run(globals *Globals) error {
+	// Check if config already exists
+	if config.Exists(c.Path) && !c.Force {
+		return fmt.Errorf("configuration already exists at %s. Use --force to overwrite", c.Path)
 	}
 
-	ctx := context.Background()
-
-	template := `# Kiln Environment Variables
-# Format: KEY=value
-DATABASE_URL=
-API_TOKEN=
-DEBUG=false
-`
-	encrypted, err := ageManager.Encrypt(ctx, []byte(template))
-	if err != nil {
-		return err
+	// Load all public keys
+	var recipients []string
+	for _, keyInput := range c.Key {
+		publicKey, err := loadPublicKey(keyInput)
+		if err != nil {
+			return fmt.Errorf("failed to load key %s: %w", keyInput, err)
+		}
+		recipients = append(recipients, publicKey)
 	}
 
-	return utils.SaveFile(envFile, encrypted)
+	// Create and save config
+	cfg := config.NewConfig()
+	for _, recipient := range recipients {
+		cfg.AddRecipient(recipient)
+	}
+
+	if err := cfg.Save(c.Path); err != nil {
+		return fmt.Errorf("failed to save configuration: %w", err)
+	}
+
+	globals.Logger.Info("configuration created", "path", c.Path, "recipients", len(recipients))
+	return nil
+}
+
+// encryptPrivateKey encrypts a private key using age's native passphrase protection
+func encryptPrivateKey(privateKey string) (string, error) {
+	// Let age handle passphrase prompting and generation
+	fmt.Print("Enter passphrase (leave empty to autogenerate): ")
+	passphrase, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		return "", err
+	}
+
+	recipient, err := age.NewScryptRecipient(string(passphrase))
+	if err != nil {
+		return "", err
+	}
+
+	var buf bytes.Buffer
+	w, err := age.Encrypt(&buf, recipient)
+	if err != nil {
+		return "", err
+	}
+
+	if _, err := w.Write([]byte(privateKey)); err != nil {
+		return "", err
+	}
+
+	if err := w.Close(); err != nil {
+		return "", err
+	}
+
+	return buf.String(), nil
+}
+
+// loadPublicKey loads a public key from either a string or file path
+func loadPublicKey(input string) (string, error) {
+	// Try as direct public key string first
+	if crypto.IsValidPublicKey(input) {
+		return input, nil
+	}
+
+	// Try as file path
+	if !utils.FileExists(input) {
+		return "", fmt.Errorf("input %s is neither a valid public key nor a readable file", input)
+	}
+
+	data, err := os.ReadFile(input)
+	if err != nil {
+		return "", fmt.Errorf("failed to read file %s: %w", input, err)
+	}
+	defer utils.WipeData(data)
+
+	content := strings.TrimSpace(string(data))
+
+	// Could be a public key
+	if crypto.IsValidPublicKey(content) {
+		return content, nil
+	}
+
+	// Could be a plain private key - extract public part
+	if crypto.IsPrivateKey(content) {
+		identity, err := age.ParseX25519Identity(content)
+		if err != nil {
+			return "", fmt.Errorf("invalid private key format in %s: %w", input, err)
+		}
+		return identity.Recipient().String(), nil
+	}
+
+	// Could be a passphrase-encrypted identity file
+	if strings.Contains(content, "age-encryption.org/v1") {
+		fmt.Printf("Private key at %s is passphrase-protected.\n", input)
+
+		// Decrypt the private key
+		decryptedKey, err := utils.DecryptPrivateKeyFromContent(content)
+		if err != nil {
+			return "", fmt.Errorf("failed to decrypt private key from %s: %w", input, err)
+		}
+		defer utils.WipeString(decryptedKey)
+
+		// Extract public key from decrypted private key
+		identity, err := age.ParseX25519Identity(decryptedKey)
+		if err != nil {
+			return "", fmt.Errorf("invalid decrypted private key format in %s: %w", input, err)
+		}
+		return identity.Recipient().String(), nil
+	}
+
+	return "", fmt.Errorf("file %s does not contain a valid age key", input)
 }

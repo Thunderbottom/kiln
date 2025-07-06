@@ -124,19 +124,6 @@ func (am *AgeManager) Decrypt(ctx context.Context, data []byte) ([]byte, error) 
 	return result, nil
 }
 
-// GenerateKeyPair generates a new Age key pair
-func GenerateKeyPair() (privateKey, publicKey string, err error) {
-	identity, err := age.GenerateX25519Identity()
-	if err != nil {
-		return "", "", fmt.Errorf("key generation failed: %w", err)
-	}
-
-	privateKey = identity.String()
-	publicKey = identity.Recipient().String()
-
-	return privateKey, publicKey, nil
-}
-
 // ValidatePublicKey validates an Age public key format
 func ValidatePublicKey(key string) error {
 	key = strings.TrimSpace(key)
@@ -158,4 +145,15 @@ func ValidatePublicKey(key string) error {
 	}
 
 	return nil
+}
+
+// IsValidPublicKey checks if a string is a valid age public key
+func IsValidPublicKey(key string) bool {
+	return ValidatePublicKey(key) == nil
+}
+
+// IsPrivateKey checks if a string looks like an age private key
+func IsPrivateKey(key string) bool {
+	key = strings.TrimSpace(key)
+	return strings.HasPrefix(key, "AGE-SECRET-KEY-")
 }
