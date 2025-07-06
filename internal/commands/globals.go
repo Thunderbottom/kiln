@@ -11,11 +11,12 @@ import (
 // Globals contains global configuration shared across all commands
 type Globals struct {
 	Config string
+	Key    string
 	Logger zerolog.Logger
 }
 
 // NewGlobals creates a new Globals instance with proper logger setup
-func NewGlobals(config string, verbose bool) *Globals {
+func NewGlobals(config, key string, verbose bool) *Globals {
 	// Configure zerolog for performance
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
@@ -35,6 +36,7 @@ func NewGlobals(config string, verbose bool) *Globals {
 
 	return &Globals{
 		Config: config,
+		Key:    key,
 		Logger: logger,
 	}
 }

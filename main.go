@@ -14,7 +14,8 @@ var (
 )
 
 type CLI struct {
-	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml"`
+	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml" type:"path"`
+	Key     string `short:"k" help:"Path to private key file" default:"~/.kiln/kiln.key" type:"path"`
 	Verbose bool   `short:"v" help:"Verbose output"`
 
 	Init    commands.InitCmd   `cmd:"" help:"Initialize new kiln project"`
@@ -41,7 +42,7 @@ func main() {
 		}),
 	)
 
-	globals := commands.NewGlobals(cli.Config, cli.Verbose)
+	globals := commands.NewGlobals(cli.Config, cli.Key, cli.Verbose)
 
 	err := ctx.Run(globals)
 	ctx.FatalIfErrorf(err)

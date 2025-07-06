@@ -16,14 +16,13 @@ import (
 type EditCmd struct {
 	File   string `short:"f" help:"Environment file to edit" default:"default"`
 	Editor string `help:"Editor to use"`
-	Key    string `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key" type:"path"`
 }
 
 func (c *EditCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
 
 	// Load existing vars or get empty map
-	vars, err := core.LoadVars(ctx, globals.Config, c.File, c.Key)
+	vars, err := core.LoadVars(ctx, globals.Config, c.File, globals.Key)
 	if err != nil {
 		return err
 	}
@@ -84,7 +83,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 		return fmt.Errorf("invalid environment file format: %w", err)
 	}
 
-	if err := core.SaveVars(ctx, globals.Config, c.File, newVars, c.Key); err != nil {
+	if err := core.SaveVars(ctx, globals.Config, c.File, newVars, globals.Key); err != nil {
 		return fmt.Errorf("failed to save changes: %w", err)
 	}
 

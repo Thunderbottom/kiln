@@ -13,7 +13,6 @@ type RekeyCmd struct {
 	File         string   `short:"f" help:"Environment file to rekey"`
 	AddRecipient []string `help:"Add new recipient public keys"`
 	Force        bool     `help:"Force rekey without confirmation"`
-	Key          string   `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key" type:"path"`
 }
 
 func (c *RekeyCmd) Run(globals *Globals) error {
@@ -47,19 +46,19 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	}
 
 	// Try to load the file with current key
-	_, loadErr := core.LoadVars(ctx, globals.Config, c.File, c.Key)
+	_, loadErr := core.LoadVars(ctx, globals.Config, c.File, globals.Key)
 	if loadErr != nil {
 		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", loadErr)
 	}
 
 	// Re-encrypt with all recipients in config
-	envVars, err := core.LoadVars(ctx, globals.Config, c.File, c.Key)
+	envVars, err := core.LoadVars(ctx, globals.Config, c.File, globals.Key)
 	if err != nil {
 		return fmt.Errorf("failed to load environment variables: %w", err)
 	}
 
 	// Save with updated recipient list
-	if err := core.SaveVars(ctx, globals.Config, c.File, envVars, c.Key); err != nil {
+	if err := core.SaveVars(ctx, globals.Config, c.File, envVars, globals.Key); err != nil {
 		return fmt.Errorf("failed to save with updated recipients: %w", err)
 	}
 

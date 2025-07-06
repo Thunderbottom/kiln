@@ -53,25 +53,25 @@ func SortedKeys(envVars map[string]string) []string {
 }
 
 // SetVar sets a single environment variable in the specified file
-func SetVar(ctx context.Context, configPath, fileName, key, value string) error {
-	vars, err := LoadVars(ctx, configPath, fileName, "")
+func SetVar(ctx context.Context, configPath, file, name, value, keyPath string) error {
+	vars, err := LoadVars(ctx, configPath, file, keyPath)
 	if err != nil {
 		return err
 	}
-	vars[key] = value
-	return SaveVars(ctx, configPath, fileName, vars, "")
+	vars[name] = value
+	return SaveVars(ctx, configPath, file, vars, keyPath)
 }
 
 // GetVar retrieves a single environment variable from the specified file
-func GetVar(ctx context.Context, configPath, fileName, key string) (string, error) {
-	vars, err := LoadVars(ctx, configPath, fileName, "")
+func GetVar(ctx context.Context, configPath, file, name, keyPath string) (string, error) {
+	vars, err := LoadVars(ctx, configPath, file, keyPath)
 	if err != nil {
 		return "", err
 	}
 
-	value, exists := vars[key]
+	value, exists := vars[name]
 	if !exists {
-		return "", fmt.Errorf("variable %s not found", key)
+		return "", fmt.Errorf("variable %s not found", name)
 	}
 
 	return value, nil

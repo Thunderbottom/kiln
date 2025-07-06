@@ -27,9 +27,9 @@ type InitKeyCmd struct {
 }
 
 type InitConfigCmd struct {
-	Path  string   `help:"Path for config file" default:"kiln.toml"`
-	Key   []string `help:"Path to public key file(s) or public key strings" required:""`
-	Force bool     `help:"Overwrite existing config"`
+	Path       string   `help:"Path for config file" default:"kiln.toml"`
+	PublicKeys []string `help:"Path to public key file(s) or public key strings" required:""`
+	Force      bool     `help:"Overwrite existing config"`
 }
 
 // Run generates a new encryption key
@@ -90,7 +90,7 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 
 	// Load all public keys
 	var recipients []string
-	for _, keyInput := range c.Key {
+	for _, keyInput := range c.PublicKeys {
 		publicKey, err := loadPublicKey(keyInput)
 		if err != nil {
 			return fmt.Errorf("failed to load key %s: %w", keyInput, err)
