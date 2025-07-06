@@ -2,42 +2,36 @@ package commands
 
 import (
 	"context"
-	"log/slog"
 	"os"
+	"time"
 
-	"github.com/lmittmann/tint"
+	"github.com/rs/zerolog"
 )
-
-type contextKey string
-
-const loggerKey contextKey = "logger"
 
 // Globals contains global configuration shared across all commands
 type Globals struct {
 	Config string
-	Logger *slog.Logger
+	Logger zerolog.Logger
 }
 
 // NewGlobals creates a new Globals instance with proper logger setup
 func NewGlobals(config string, verbose bool) *Globals {
-	var level slog.Level
-	if verbose {
-		level = slog.LevelDebug
-	} else {
-		level = slog.LevelInfo
-	}
+	// Configure zerolog for performance
+	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
-	opts := &tint.Options{
-		Level: level,
-		ReplaceAttr: func(groups []string, a slog.Attr) slog.Attr {
-			// Remove time for cleaner CLI output
-			if a.Key == slog.TimeKey && len(groups) == 0 {
-				return slog.Attr{}
-			}
-			return a
-		},
+	var logger zerolog.Logger
+	// Pretty console output for development
+	logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
+		With().
+		Timestamp().
+		Logger()
+
+	// Set global log level based on verbose flag
+	if verbose {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+		logger = logger.With().
+			Caller().Logger()
 	}
-	logger := slog.New(tint.NewHandler(os.Stderr, opts))
 
 	return &Globals{
 		Config: config,
@@ -47,5 +41,5 @@ func NewGlobals(config string, verbose bool) *Globals {
 
 // Context returns a context with the logger attached
 func (g *Globals) Context() context.Context {
-	return context.WithValue(context.Background(), loggerKey, g.Logger)
+	return g.Logger.WithContext(context.Background())
 }

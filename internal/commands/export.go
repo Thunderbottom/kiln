@@ -50,7 +50,7 @@ func (c *ExportCmd) Run(globals *Globals) error {
 		encoder := yaml.NewEncoder(os.Stdout)
 		defer func() {
 			if err := encoder.Close(); err != nil {
-				globals.Logger.Debug("failed to close yaml encoder", "error", err)
+				globals.Logger.Debug().Err(err).Msg("failed to close yaml encoder")
 			}
 		}()
 

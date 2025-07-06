@@ -34,15 +34,17 @@ func (c *RunCmd) Run(globals *Globals) error {
 	}
 
 	if c.DryRun {
-		globals.Logger.Info("dry run mode enabled", "cmd", strings.Join(c.Command, " "),
-			"variables", len(envVars))
+		globals.Logger.Info().
+			Str("cmd", strings.Join(c.Command, " ")).
+			Int("variables", len(envVars)).
+			Msg("dry run mode enabled")
 
 		for key, value := range envVars {
 			displayValue := value
 			if len(displayValue) > 50 {
 				displayValue = displayValue[:47] + "..."
 			}
-			globals.Logger.Info("var", "key", key, "value", displayValue)
+			globals.Logger.Info().Str("key", key).Str("value", displayValue)
 		}
 
 		return nil
@@ -84,9 +86,9 @@ func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) err
 		cmd.Dir = c.WorkDir
 	}
 
-	globals.Logger.Debug("executing command", "cmd", strings.Join(c.Command, " "))
+	globals.Logger.Debug().Str("cmd", strings.Join(c.Command, " ")).Msg("executing command")
 	if c.Expand {
-		globals.Logger.Debug("variable expansion applied", "count", len(envVars))
+		globals.Logger.Debug().Msg("variable expansion applied")
 	}
 
 	err := cmd.Run()

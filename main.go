@@ -36,6 +36,9 @@ func main() {
 		kong.Description("Secure environment variable management tool"),
 		kong.Vars{"version": fmt.Sprintf("%s (%s, built %s)", version, commit, date)},
 		kong.UsageOnError(),
+		kong.ConfigureHelp(kong.HelpOptions{
+			Compact: true,
+		}),
 	)
 
 	globals := commands.NewGlobals(cli.Config, cli.Verbose)

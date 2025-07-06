@@ -68,7 +68,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 	}
 
 	if !afterStat.ModTime().After(beforeStat.ModTime()) {
-		globals.Logger.Info("no changes detected")
+		globals.Logger.Info().Msg("no changes detected")
 		return nil
 	}
 
@@ -88,7 +88,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 		return fmt.Errorf("failed to save changes: %w", err)
 	}
 
-	globals.Logger.Info("environment file updated", "file", c.File)
+	globals.Logger.Info().Str("file", c.File).Msg("environment file updated")
 	return nil
 }
 
@@ -110,7 +110,7 @@ func (c *EditCmd) createTempFile(content []byte, globals *Globals) (string, erro
 	}
 	defer func() {
 		if err := tempFile.Close(); err != nil {
-			globals.Logger.Debug("failed to close temp file", "error", err)
+			globals.Logger.Debug().Err(err).Msg("failed to close temp file")
 		}
 	}()
 
@@ -148,7 +148,7 @@ func (c *EditCmd) launchEditor(tempFile string, globals *Globals) error {
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
 
-	globals.Logger.Debug("launching editor", "editor", editor)
+	globals.Logger.Debug().Str("editor", editor).Msg("launching editor")
 
 	if err := cmd.Run(); err != nil {
 		if ctx.Err() == context.DeadlineExceeded {

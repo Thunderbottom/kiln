@@ -14,6 +14,10 @@ func (c *SetCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	globals.Logger.Info("environment variable set successfully", "key", c.Key, "file", c.File)
+	globals.Logger.Info().
+		Str("key", c.Key).
+		Str("file", c.File).
+		Msg("environment variable set successfully")
+
 	return nil
 }

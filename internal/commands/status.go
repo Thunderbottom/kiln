@@ -18,7 +18,7 @@ func (c *StatusCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	globals.Logger.Info("Kiln Project Status", "config", globals.Config, "recipients", len(cfg.Recipients))
+	globals.Logger.Info().Str("config", globals.Config).Int("recipients", len(cfg.Recipients)).Msg("kiln project status")
 
 	if c.File != "" {
 		return c.showFileStatus(globals, c.File)
@@ -26,7 +26,7 @@ func (c *StatusCmd) Run(globals *Globals) error {
 
 	for name := range cfg.Files {
 		if err := c.showFileStatus(globals, name); err != nil {
-			globals.Logger.Error(fmt.Sprintf("%v", err), "file", name)
+			globals.Logger.Error().Err(err).Str("file", name)
 		}
 	}
 	return nil
@@ -35,16 +35,23 @@ func (c *StatusCmd) Run(globals *Globals) error {
 func (c *StatusCmd) showFileStatus(globals *Globals, fileName string) error {
 	filePath, info, err := core.GetFileInfo(globals.Config, fileName)
 	if os.IsNotExist(err) {
-		globals.Logger.Error("file not found", "file", fileName, "path", filePath)
+		globals.Logger.Error().
+			Str("file", fileName).
+			Str("path", filePath).
+			Msg("file not found")
+
 		return nil
 	} else if err != nil {
 		return err
 	}
 
 	modified := info.ModTime().Format("2006-01-02 15:04:05")
-	globals.Logger.Info("file metadata", "file", fileName,
-		"path", filePath, "modified", modified,
-		"size", fmt.Sprintf("%.2f KB", float64(info.Size())/1024.0))
+	globals.Logger.Info().
+		Str("file", fileName).
+		Str("path", filePath).
+		Str("modified", modified).
+		Str("size", fmt.Sprintf("%.2fKB", float64(info.Size())/1024.0)).
+		Msg("file metadata")
 
 	return nil
 }

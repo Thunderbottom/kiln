@@ -69,11 +69,13 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	}
 
 	if !c.Encrypt {
-		globals.Logger.Warn(`private key is NOT password protected
-Consider regenerating the key with password protection or use external encryption`)
+		globals.Logger.Warn().Msg("private key is NOT password protected")
 	}
 
-	globals.Logger.Info("key pair generated", "private", keyPath, "encrypted", c.Encrypt)
+	globals.Logger.Info().
+		Str("private", keyPath).
+		Bool("encrypted", c.Encrypt).
+		Msg("key pair generated")
 	fmt.Printf("\nage public key: %s\n", publicKey)
 
 	return nil
@@ -106,7 +108,11 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 		return fmt.Errorf("failed to save configuration: %w", err)
 	}
 
-	globals.Logger.Info("configuration created", "path", c.Path, "recipients", len(recipients))
+	globals.Logger.Info().
+		Str("path", c.Path).
+		Int("recipients", len(recipients)).
+		Msg("configuration created")
+
 	return nil
 }
 

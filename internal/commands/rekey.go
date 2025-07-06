@@ -42,7 +42,7 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	}
 
 	if !utils.FileExists(envFilePath) {
-		globals.Logger.Debug("file does not exist, skipping", "filename", c.File)
+		globals.Logger.Debug().Str("file", c.File).Msg("file does not exist, skipping")
 		return nil
 	}
 
@@ -63,6 +63,10 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("failed to save with updated recipients: %w", err)
 	}
 
-	globals.Logger.Info("successfully rekeyed file", "file", c.File, "total_recipients", len(cfg.Recipients))
+	globals.Logger.Info().
+		Str("file", c.File).
+		Int("recipients", len(cfg.Recipients)).
+		Msg("successfully rekeyed file")
+
 	return nil
 }
