@@ -19,6 +19,7 @@ type RunCmd struct {
 	WorkDir string   `help:"Working directory for command execution"`
 	Shell   bool     `help:"Run command through shell"`
 	Expand  bool     `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	Key     string   `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key" type:"path"`
 	Command []string `arg:"" help:"Command and arguments to run"`
 }
 
@@ -28,7 +29,7 @@ func (c *RunCmd) Run(globals *Globals) error {
 	}
 
 	ctx := globals.Context()
-	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand)
+	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Key, c.Expand)
 	if err != nil {
 		return err
 	}

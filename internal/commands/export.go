@@ -17,11 +17,12 @@ type ExportCmd struct {
 	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
 	NoMask bool   `help:"Disable masking sensitive values"`
 	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	Key    string `help:"Path to private key file to use for decryption" default:"~/.kiln/kiln.key" type:"path"`
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
-	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Expand)
+	envVars, err := core.ExportVars(ctx, globals.Config, c.File, c.Key, c.Expand)
 	if err != nil {
 		return err
 	}

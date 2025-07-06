@@ -78,8 +78,8 @@ func GetVar(ctx context.Context, configPath, fileName, key string) (string, erro
 }
 
 // ExportVars loads environment variables and optionally applies expansion
-func ExportVars(ctx context.Context, configPath, fileName string, expand bool) (map[string]string, error) {
-	vars, err := LoadVars(ctx, configPath, fileName, "")
+func ExportVars(ctx context.Context, configPath, fileName, keyPath string, expand bool) (map[string]string, error) {
+	vars, err := LoadVars(ctx, configPath, fileName, keyPath)
 	if err != nil {
 		return nil, err
 	}
