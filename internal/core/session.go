@@ -33,7 +33,7 @@ func NewSession(configPath, keyPath string) (*Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
-	defer WipeString(privateKey)
+	defer WipeData(privateKey)
 
 	// Setup crypto manager once per session
 	ageManager, err := newAgeManager(cfg.Recipients)
@@ -52,7 +52,7 @@ func NewSession(configPath, keyPath string) (*Session, error) {
 }
 
 // LoadVars loads and decrypts environment variables from file
-func (s *Session) LoadVars(ctx context.Context, fileName string) (map[string]string, error) {
+func (s *Session) LoadVars(ctx context.Context, fileName string) (map[string][]byte, error) {
 	envFilePath, err := s.config.GetEnvFile(fileName)
 	if err != nil {
 		return nil, err
@@ -60,7 +60,7 @@ func (s *Session) LoadVars(ctx context.Context, fileName string) (map[string]str
 
 	// Return empty map if file doesn't exist
 	if !FileExists(envFilePath) {
-		return make(map[string]string), nil
+		return make(map[string][]byte), nil
 	}
 
 	// Read encrypted file
@@ -70,28 +70,45 @@ func (s *Session) LoadVars(ctx context.Context, fileName string) (map[string]str
 	}
 
 	// Decrypt using session's cached crypto manager
-	plaintext, err := s.ageManager.decrypt(ctx, encrypted)
+	plaintext, err := s.ageManager.decrypt(encrypted)
 	if err != nil {
 		return nil, fmt.Errorf("failed to decrypt: %w", err)
 	}
 	defer WipeData(plaintext)
 
-	// Parse environment file
-	return ParseEnvFile(string(plaintext))
+	// Parse environment file and convert to []byte values
+	stringVars, err := ParseEnvFile(string(plaintext))
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert string values to []byte
+	vars := make(map[string][]byte)
+	for key, value := range stringVars {
+		vars[key] = []byte(value)
+	}
+
+	return vars, nil
 }
 
 // SaveVars encrypts and saves environment variables to file
-func (s *Session) SaveVars(ctx context.Context, fileName string, vars map[string]string) error {
+func (s *Session) SaveVars(ctx context.Context, fileName string, vars map[string][]byte) error {
 	envFilePath, err := s.config.GetEnvFile(fileName)
 	if err != nil {
 		return err
 	}
 
+	// Convert []byte values to string for formatting
+	stringVars := make(map[string]string)
+	for key, value := range vars {
+		stringVars[key] = string(value)
+	}
+
 	// Format content
-	content := FormatEnvFile(vars)
+	content := FormatEnvFile(stringVars)
 
 	// Encrypt using session's cached crypto manager
-	encrypted, err := s.ageManager.encrypt(ctx, []byte(content))
+	encrypted, err := s.ageManager.encrypt([]byte(content))
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
@@ -101,7 +118,7 @@ func (s *Session) SaveVars(ctx context.Context, fileName string, vars map[string
 }
 
 // SetVar sets a single environment variable
-func (s *Session) SetVar(ctx context.Context, fileName, key, value string) error {
+func (s *Session) SetVar(ctx context.Context, fileName, key string, value []byte) error {
 	vars, err := s.LoadVars(ctx, fileName)
 	if err != nil {
 		return err
@@ -111,21 +128,21 @@ func (s *Session) SetVar(ctx context.Context, fileName, key, value string) error
 }
 
 // GetVar gets a single environment variable
-func (s *Session) GetVar(ctx context.Context, fileName, key string) (string, error) {
+func (s *Session) GetVar(ctx context.Context, fileName, key string) ([]byte, error) {
 	vars, err := s.LoadVars(ctx, fileName)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
 	value, exists := vars[key]
 	if !exists {
-		return "", fmt.Errorf("variable %s not found", key)
+		return nil, fmt.Errorf("variable %s not found", key)
 	}
 	return value, nil
 }
 
 // ExportVars loads variables with optional expansion
-func (s *Session) ExportVars(ctx context.Context, fileName string, expand bool) (map[string]string, error) {
+func (s *Session) ExportVars(ctx context.Context, fileName string, expand bool) (map[string][]byte, error) {
 	vars, err := s.LoadVars(ctx, fileName)
 	if err != nil {
 		return nil, err
@@ -136,17 +153,28 @@ func (s *Session) ExportVars(ctx context.Context, fileName string, expand bool) 
 	}
 
 	// Apply variable expansion
-	expanded := make(map[string]string)
+	stringVars := make(map[string]string)
 	for key, value := range vars {
+		stringVars[key] = string(value)
+	}
+
+	expanded := make(map[string]string)
+	for key, value := range stringVars {
 		expanded[key] = os.Expand(value, func(expandKey string) string {
-			if val, exists := vars[expandKey]; exists {
+			if val, exists := stringVars[expandKey]; exists {
 				return val
 			}
 			return os.Getenv(expandKey)
 		})
 	}
 
-	return expanded, nil
+	// Convert back to []byte
+	result := make(map[string][]byte)
+	for key, value := range expanded {
+		result[key] = []byte(value)
+	}
+
+	return result, nil
 }
 
 // CheckFile validates that a file can be decrypted
@@ -166,25 +194,8 @@ func (s *Session) GetFileInfo(fileName string) (string, os.FileInfo, error) {
 	return filePath, info, err
 }
 
-// MaskVars applies masking to sensitive variables
-func (s *Session) MaskVars(vars map[string]string) map[string]string {
-	if len(s.config.Security.MaskKeys) == 0 {
-		return vars
-	}
-
-	masked := make(map[string]string)
-	for key, value := range vars {
-		if s.config.ShouldMaskKey(key) {
-			masked[key] = s.config.MaskValue(value)
-		} else {
-			masked[key] = value
-		}
-	}
-	return masked
-}
-
 // SortedKeys returns sorted keys from environment variables map (exported for export command)
-func SortedKeys(envVars map[string]string) []string {
+func SortedKeys(envVars map[string][]byte) []string {
 	keys := make([]string, 0, len(envVars))
 	for key := range envVars {
 		keys = append(keys, key)

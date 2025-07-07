@@ -19,12 +19,6 @@ const (
 type Config struct {
 	Recipients []string          `toml:"recipients"`
 	Files      map[string]string `toml:"files"`
-	Security   SecurityConfig    `toml:"security,omitempty"`
-}
-
-type SecurityConfig struct {
-	MaskKeys  []string `toml:"mask_keys,omitempty"`
-	ShowChars int      `toml:"show_chars,omitempty"`
 }
 
 // NewConfig creates a new configuration with defaults
@@ -33,10 +27,6 @@ func NewConfig() *Config {
 		Recipients: []string{},
 		Files: map[string]string{
 			"default": DefaultEnvFile,
-		},
-		Security: SecurityConfig{
-			MaskKeys:  []string{},
-			ShowChars: 4,
 		},
 	}
 }
@@ -79,19 +69,6 @@ func (c *Config) Save(path string) error {
 func (c *Config) Validate() error {
 	if len(c.Recipients) == 0 {
 		return fmt.Errorf("no recipients configured - run 'kiln init' or add recipients")
-	}
-
-	for i, recipient := range c.Recipients {
-		recipient = strings.TrimSpace(recipient)
-		if recipient == "" {
-			return fmt.Errorf("recipient %d: empty public key", i+1)
-		}
-		if !strings.HasPrefix(recipient, "age1") {
-			return fmt.Errorf("recipient %d: public key must start with 'age1'", i+1)
-		}
-		if len(recipient) != 62 {
-			return fmt.Errorf("recipient %d: invalid public key length", i+1)
-		}
 	}
 
 	for name, path := range c.Files {
@@ -147,27 +124,4 @@ func Exists(path string) bool {
 	}
 	_, err := os.Stat(path)
 	return err == nil
-}
-
-// ShouldMaskKey checks if a key should be masked based on config
-func (c *Config) ShouldMaskKey(key string) bool {
-	for _, maskKey := range c.Security.MaskKeys {
-		if strings.EqualFold(key, maskKey) {
-			return true
-		}
-	}
-	return false
-}
-
-// MaskValue masks a value according to config settings
-func (c *Config) MaskValue(value string) string {
-	if c.Security.ShowChars <= 0 {
-		return strings.Repeat("*", len(value))
-	}
-
-	if len(value) <= c.Security.ShowChars {
-		return strings.Repeat("*", len(value))
-	}
-
-	return strings.Repeat("*", len(value)-c.Security.ShowChars) + value[len(value)-c.Security.ShowChars:]
 }

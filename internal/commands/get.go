@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type GetCmd struct {
@@ -23,12 +25,13 @@ func (c *GetCmd) Run(globals *Globals) error {
 	if err != nil {
 		return err
 	}
+	defer core.WipeData(value)
 
 	switch c.Format {
 	case "value":
-		fmt.Println(value)
+		fmt.Print(string(value))
 	case "json":
-		return json.NewEncoder(os.Stdout).Encode(map[string]string{c.Name: value})
+		return json.NewEncoder(os.Stdout).Encode(map[string]string{c.Name: string(value)})
 	}
 	return nil
 }

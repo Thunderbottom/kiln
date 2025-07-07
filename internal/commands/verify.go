@@ -3,7 +3,8 @@ package commands
 import "fmt"
 
 type VerifyCmd struct {
-	File string `short:"f" help:"Verify specific file"`
+	File   string `short:"f" help:"Verify specific file"`
+	Verify bool   `help:"Verify file integrity" default:"false"`
 }
 
 func (c *VerifyCmd) Run(globals *Globals) error {

@@ -5,7 +5,9 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
-	"path/filepath"
+	"os/signal"
+	"sync"
+	"syscall"
 	"time"
 
 	"github.com/thunderbottom/kiln/internal/core"
@@ -15,6 +17,13 @@ type EditCmd struct {
 	File   string `short:"f" help:"Environment file to edit" default:"default"`
 	Editor string `help:"Editor to use"`
 }
+
+// Global cleanup tracking for signal handling
+var (
+	activeCleanups []func()
+	cleanupMu      sync.Mutex
+	signalSetup    sync.Once
+)
 
 func (c *EditCmd) Run(globals *Globals) error {
 	sess, err := globals.Session()
@@ -29,10 +38,22 @@ func (c *EditCmd) Run(globals *Globals) error {
 		return err
 	}
 
+	// Ensure all values are wiped when we're done
+	defer func() {
+		for _, value := range vars {
+			core.WipeData(value)
+		}
+	}()
+
+	stringVars := make(map[string]string)
+	for key, value := range vars {
+		stringVars[key] = string(value)
+	}
+
 	// Format content for editing
 	var content []byte
-	if len(vars) > 0 {
-		content = []byte(core.FormatEnvFile(vars))
+	if len(stringVars) > 0 {
+		content = []byte(core.FormatEnvFile(stringVars))
 	} else {
 		content = []byte(`# Environment Variables
 # Format: KEY=value
@@ -40,30 +61,47 @@ func (c *EditCmd) Run(globals *Globals) error {
 	}
 
 	// Create secure temp file
-	tempFile, err := c.createTempFile(content)
+	tempFile, err := os.CreateTemp("", "*.env")
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to create temp file: %w", err)
 	}
+
+	// Setup cleanup
+	cleanup := func() {
+		tempFile.Close()
+		os.Remove(tempFile.Name())
+	}
+
+	// Setup signal handling and register cleanup
+	c.setupSignalHandling()
+	c.registerCleanup(cleanup)
 	defer func() {
-		if data, err := os.ReadFile(tempFile); err == nil {
-			core.WipeData(data)
-		}
-		_ = os.Remove(tempFile)
+		c.unregisterCleanup(cleanup)
+		cleanup()
 	}()
 
+	// Write content to temp file
+	if _, err := tempFile.Write(content); err != nil {
+		return fmt.Errorf("failed to write content to temp file: %w", err)
+	}
+
+	if err := tempFile.Close(); err != nil {
+		return fmt.Errorf("failed to close temp file: %w", err)
+	}
+
 	// Get modification time before editing
-	beforeStat, err := os.Stat(tempFile)
+	beforeStat, err := os.Stat(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to stat temp file: %w", err)
 	}
 
 	// Launch editor
-	if err := c.launchEditor(tempFile, globals); err != nil {
+	if err := c.launchEditor(tempFile.Name(), globals); err != nil {
 		return err
 	}
 
 	// Check if file was modified
-	afterStat, err := os.Stat(tempFile)
+	afterStat, err := os.Stat(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to stat temp file after editing: %w", err)
 	}
@@ -74,16 +112,28 @@ func (c *EditCmd) Run(globals *Globals) error {
 	}
 
 	// Read and save changes
-	modified, err := os.ReadFile(tempFile)
+	modified, err := os.ReadFile(tempFile.Name())
 	if err != nil {
 		return fmt.Errorf("failed to read modified content: %w", err)
 	}
 	defer core.WipeData(modified)
 
-	newVars, err := core.ParseEnvFile(string(modified))
+	newStringVars, err := core.ParseEnvFile(string(modified))
 	if err != nil {
 		return fmt.Errorf("invalid environment file format: %w", err)
 	}
+
+	newVars := make(map[string][]byte)
+	for key, value := range newStringVars {
+		newVars[key] = []byte(value)
+	}
+
+	// Ensure new values are wiped when done
+	defer func() {
+		for _, value := range newVars {
+			core.WipeData(value)
+		}
+	}()
 
 	if err := sess.SaveVars(ctx, c.File, newVars); err != nil {
 		return fmt.Errorf("failed to save changes: %w", err)
@@ -93,32 +143,47 @@ func (c *EditCmd) Run(globals *Globals) error {
 	return nil
 }
 
-func (c *EditCmd) createTempFile(content []byte) (string, error) {
-	tempDir := os.TempDir()
-	if home, err := os.UserHomeDir(); err == nil {
-		kilnTemp := filepath.Join(home, ".kiln", "tmp")
-		if err := os.MkdirAll(kilnTemp, 0700); err == nil {
-			tempDir = kilnTemp
+// setupSignalHandling initializes signal handling for graceful cleanup
+func (c *EditCmd) setupSignalHandling() {
+	signalSetup.Do(func() {
+		sigChan := make(chan os.Signal, 1)
+		signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
+
+		go func() {
+			<-sigChan
+			// Run all registered cleanup functions
+			cleanupMu.Lock()
+			for _, cleanup := range activeCleanups {
+				cleanup()
+			}
+			cleanupMu.Unlock()
+
+			// Exit with appropriate code
+			// 128 + SIGINT(2) = 130
+			os.Exit(130)
+		}()
+	})
+}
+
+// registerCleanup adds a cleanup function to be called on signal
+func (c *EditCmd) registerCleanup(cleanup func()) {
+	cleanupMu.Lock()
+	defer cleanupMu.Unlock()
+	activeCleanups = append(activeCleanups, cleanup)
+}
+
+// unregisterCleanup removes a cleanup function from the signal handler
+func (c *EditCmd) unregisterCleanup(targetCleanup func()) {
+	cleanupMu.Lock()
+	defer cleanupMu.Unlock()
+
+	newCleanups := make([]func(), 0, len(activeCleanups))
+	for _, cleanup := range activeCleanups {
+		if fmt.Sprintf("%p", cleanup) != fmt.Sprintf("%p", targetCleanup) {
+			newCleanups = append(newCleanups, cleanup)
 		}
 	}
-
-	tempFile, err := os.CreateTemp(tempDir, "kiln-edit-*.env")
-	if err != nil {
-		return "", fmt.Errorf("failed to create temp file: %w", err)
-	}
-	defer tempFile.Close()
-
-	if err := tempFile.Chmod(0600); err != nil {
-		_ = os.Remove(tempFile.Name())
-		return "", fmt.Errorf("failed to set permissions: %w", err)
-	}
-
-	if _, err := tempFile.Write(content); err != nil {
-		_ = os.Remove(tempFile.Name())
-		return "", fmt.Errorf("failed to write content: %w", err)
-	}
-
-	return tempFile.Name(), nil
+	activeCleanups = newCleanups
 }
 
 func (c *EditCmd) launchEditor(tempFile string, globals *Globals) error {

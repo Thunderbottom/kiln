@@ -13,7 +13,6 @@ import (
 type ExportCmd struct {
 	File   string `short:"f" help:"Environment file to export" default:"default"`
 	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
-	NoMask bool   `help:"Disable masking sensitive values"`
 	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
 }
 
@@ -29,30 +28,27 @@ func (c *ExportCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	// Apply masking unless disabled
-	if !c.NoMask {
-		envVars = sess.MaskVars(envVars)
+	stringVars := make(map[string]string)
+	for key, value := range envVars {
+		stringVars[key] = string(value)
+		defer core.WipeData(value)
 	}
 
 	switch c.Format {
 	case "shell":
 		keys := core.SortedKeys(envVars)
 		for _, key := range keys {
-			value := envVars[key]
+			value := stringVars[key]
 			fmt.Printf("export %s='%s'\n", key, strings.ReplaceAll(value, "'", "'\"'\"'"))
 		}
 	case "json":
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(envVars)
+		return encoder.Encode(stringVars)
 	case "yaml":
 		encoder := yaml.NewEncoder(os.Stdout)
-		defer func() {
-			if err := encoder.Close(); err != nil {
-				globals.Logger.Debug().Err(err).Msg("failed to close yaml encoder")
-			}
-		}()
-		return encoder.Encode(envVars)
+		defer encoder.Close()
+		return encoder.Encode(stringVars)
 	}
 	return nil
 }

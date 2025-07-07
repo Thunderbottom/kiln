@@ -8,6 +8,8 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type RunCmd struct {
@@ -31,10 +33,17 @@ func (c *RunCmd) Run(globals *Globals) error {
 	}
 
 	ctx := globals.Context()
+
 	envVars, err := sess.ExportVars(ctx, c.File, c.Expand)
 	if err != nil {
 		return err
 	}
+
+	defer func() {
+		for _, value := range envVars {
+			core.WipeData(value)
+		}
+	}()
 
 	if c.DryRun {
 		globals.Logger.Info().
@@ -43,11 +52,11 @@ func (c *RunCmd) Run(globals *Globals) error {
 			Msg("dry run mode enabled")
 
 		for key, value := range envVars {
-			displayValue := value
+			displayValue := string(value)
 			if len(displayValue) > 50 {
 				displayValue = displayValue[:47] + "..."
 			}
-			globals.Logger.Info().Str("key", key).Str("value", displayValue)
+			globals.Logger.Info().Str("key", key).Str("value", displayValue).Msg("environment variable")
 		}
 
 		return nil
@@ -56,7 +65,7 @@ func (c *RunCmd) Run(globals *Globals) error {
 	return c.executeCommand(envVars, globals)
 }
 
-func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) error {
+func (c *RunCmd) executeCommand(envVars map[string][]byte, globals *Globals) error {
 	ctx := context.Background()
 	if c.Timeout != "" {
 		duration, err := time.ParseDuration(c.Timeout)
@@ -78,7 +87,19 @@ func (c *RunCmd) executeCommand(envVars map[string]string, globals *Globals) err
 
 	cmd.Env = os.Environ()
 	for key, value := range envVars {
-		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, value))
+		stringValue := string(value)
+		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, stringValue))
+
+		// Wipe the string copy after adding to environment
+		// NOTE: We can't wipe the actual string in cmd.Env since
+		// it's needed by the command but we can wipe our local copy
+		for i := range stringValue {
+			if i < len(stringValue) {
+				// This is a best-effort attempt to clear the string
+				// Go strings are immutable, so this doesn't actually work
+				// but it shows intent. The []byte wiping in defer is the real protection.
+			}
+		}
 	}
 
 	cmd.Stdin = os.Stdin

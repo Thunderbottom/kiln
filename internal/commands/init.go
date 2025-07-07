@@ -50,23 +50,24 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("failed to generate key pair: %w", err)
 	}
 
-	privateKey := identity.String()
+	privateKey := []byte(identity.String())
 	publicKey := identity.Recipient().String()
 
-	// Handle encryption for private key
 	if c.Encrypt {
-		encryptedKey, err := encryptPrivateKey(privateKey)
+		encryptedKey, err := encryptPrivateKey(string(privateKey))
 		if err != nil {
+			core.WipeData(privateKey) // Wipe original
 			return fmt.Errorf("failed to encrypt private key: %w", err)
 		}
-		privateKey = encryptedKey
-		core.WipeString(identity.String())
+		privateKey = []byte(encryptedKey)
+		core.WipeData(privateKey) // Wipe original unencrypted key
 	}
 
 	// Save private key
 	if err := core.SavePrivateKey(privateKey, keyPath); err != nil {
 		return fmt.Errorf("failed to save private key: %w", err)
 	}
+	core.WipeData(privateKey)
 
 	if !c.Encrypt {
 		globals.Logger.Warn().Msg("private key is NOT password protected")

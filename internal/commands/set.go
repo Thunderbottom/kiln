@@ -13,7 +13,7 @@ func (c *SetCmd) Run(globals *Globals) error {
 	}
 
 	ctx := globals.Context()
-	if err := sess.SetVar(ctx, c.File, c.Name, c.Value); err != nil {
+	if err := sess.SetVar(ctx, c.File, c.Name, []byte(c.Value)); err != nil {
 		return err
 	}
 
