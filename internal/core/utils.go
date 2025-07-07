@@ -1,10 +1,11 @@
-package utils
+package core
 
 import (
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"syscall"
 
@@ -12,8 +13,8 @@ import (
 	"golang.org/x/term"
 )
 
-// LoadPrivateKey loads a private key from the specified path or default locations
-func LoadPrivateKey(keyPath string) (string, error) {
+// loadPrivateKey loads a private key from the specified path or default locations
+func loadPrivateKey(keyPath string) (string, error) {
 	if keyPath == "" {
 		if envPath := os.Getenv("KILN_PRIVATE_KEY_FILE"); envPath != "" {
 			keyPath = envPath
@@ -40,14 +41,14 @@ func LoadPrivateKey(keyPath string) (string, error) {
 	// Check if it's passphrase-protected
 	if strings.Contains(key, "age-encryption.org/v1") {
 		fmt.Printf("Private key at %s is passphrase-protected.\n", keyPath)
-		return DecryptPrivateKey(key)
+		return decryptPrivateKey(key)
 	}
 
 	return key, nil
 }
 
-// DecryptPrivateKey decrypts an age-encrypted private key
-func DecryptPrivateKey(encryptedKey string) (string, error) {
+// decryptPrivateKey decrypts an age-encrypted private key
+func decryptPrivateKey(encryptedKey string) (string, error) {
 	fmt.Print("Enter passphrase: ")
 	passphrase, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
@@ -86,8 +87,8 @@ func SavePrivateKey(privateKey, filename string) error {
 	return os.WriteFile(filename, []byte(privateKey+"\n"), 0600)
 }
 
-// SaveFile writes data to a file with secure permissions
-func SaveFile(filename string, data []byte) error {
+// saveFile writes data to a file with secure permissions
+func saveFile(filename string, data []byte) error {
 	dir := filepath.Dir(filename)
 	if err := os.MkdirAll(dir, 0700); err != nil {
 		return err
@@ -100,4 +101,25 @@ func SaveFile(filename string, data []byte) error {
 func FileExists(filename string) bool {
 	_, err := os.Stat(filename)
 	return err == nil
+}
+
+// WipeData securely clears sensitive data from a byte slice
+func WipeData(data []byte) {
+	if data == nil {
+		return
+	}
+	for i := range data {
+		data[i] = 0
+	}
+	runtime.KeepAlive(data)
+}
+
+// WipeString securely clears a string from memory
+func WipeString(s string) {
+	if s == "" {
+		return
+	}
+	// Convert to byte slice and wipe
+	b := []byte(s)
+	WipeData(b)
 }

@@ -1,4 +1,4 @@
-package crypto
+package core
 
 import (
 	"bytes"
@@ -10,14 +10,14 @@ import (
 	"filippo.io/age"
 )
 
-// AgeManager handles Age encryption/decryption operations
-type AgeManager struct {
+// ageManager handles Age encryption/decryption operations (unexported)
+type ageManager struct {
 	recipients []age.Recipient
 	identities []age.Identity
 }
 
-// NewAgeManager creates a new Age manager with the given public keys
-func NewAgeManager(publicKeys []string) (*AgeManager, error) {
+// newAgeManager creates a new Age manager with the given public keys (unexported)
+func newAgeManager(publicKeys []string) (*ageManager, error) {
 	if len(publicKeys) == 0 {
 		return nil, fmt.Errorf("no public keys provided")
 	}
@@ -41,13 +41,13 @@ func NewAgeManager(publicKeys []string) (*AgeManager, error) {
 		return nil, fmt.Errorf("no valid public keys found")
 	}
 
-	return &AgeManager{
+	return &ageManager{
 		recipients: recipients,
 	}, nil
 }
 
-// AddIdentity adds a private key identity for decryption
-func (am *AgeManager) AddIdentity(privateKey string) error {
+// addIdentity adds a private key identity for decryption (unexported)
+func (am *ageManager) addIdentity(privateKey string) error {
 	privateKey = strings.TrimSpace(privateKey)
 	if privateKey == "" {
 		return fmt.Errorf("empty private key")
@@ -62,8 +62,8 @@ func (am *AgeManager) AddIdentity(privateKey string) error {
 	return nil
 }
 
-// Encrypt encrypts data using all configured recipients
-func (am *AgeManager) Encrypt(ctx context.Context, data []byte) ([]byte, error) {
+// encrypt encrypts data using all configured recipients (unexported)
+func (am *ageManager) encrypt(ctx context.Context, data []byte) ([]byte, error) {
 	if len(am.recipients) == 0 {
 		return nil, fmt.Errorf("no recipients configured")
 	}
@@ -95,8 +95,8 @@ func (am *AgeManager) Encrypt(ctx context.Context, data []byte) ([]byte, error) 
 	return buf.Bytes(), nil
 }
 
-// Decrypt decrypts data using configured identities
-func (am *AgeManager) Decrypt(ctx context.Context, data []byte) ([]byte, error) {
+// decrypt decrypts data using configured identities (unexported)
+func (am *ageManager) decrypt(ctx context.Context, data []byte) ([]byte, error) {
 	if len(am.identities) == 0 {
 		return nil, fmt.Errorf("no identities configured")
 	}
@@ -124,7 +124,7 @@ func (am *AgeManager) Decrypt(ctx context.Context, data []byte) ([]byte, error) 
 	return result, nil
 }
 
-// ValidatePublicKey validates an Age public key format
+// ValidatePublicKey validates an Age public key format (exported for init command)
 func ValidatePublicKey(key string) error {
 	key = strings.TrimSpace(key)
 	if key == "" {
@@ -147,12 +147,12 @@ func ValidatePublicKey(key string) error {
 	return nil
 }
 
-// IsValidPublicKey checks if a string is a valid age public key
+// IsValidPublicKey checks if a string is a valid age public key (exported for init command)
 func IsValidPublicKey(key string) bool {
 	return ValidatePublicKey(key) == nil
 }
 
-// IsPrivateKey checks if a string looks like an age private key
+// IsPrivateKey checks if a string looks like an age private key (exported for init command)
 func IsPrivateKey(key string) bool {
 	key = strings.TrimSpace(key)
 	return strings.HasPrefix(key, "AGE-SECRET-KEY-")

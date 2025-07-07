@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-
-	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type GetCmd struct {
@@ -15,8 +13,13 @@ type GetCmd struct {
 }
 
 func (c *GetCmd) Run(globals *Globals) error {
+	sess, err := globals.Session()
+	if err != nil {
+		return err
+	}
+
 	ctx := globals.Context()
-	value, err := core.GetVar(ctx, globals.Config, c.File, c.Name, globals.Key)
+	value, err := sess.GetVar(ctx, c.File, c.Name)
 	if err != nil {
 		return err
 	}

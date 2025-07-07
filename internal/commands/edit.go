@@ -9,8 +9,6 @@ import (
 	"time"
 
 	"github.com/thunderbottom/kiln/internal/core"
-	"github.com/thunderbottom/kiln/internal/env"
-	"github.com/thunderbottom/kiln/internal/utils"
 )
 
 type EditCmd struct {
@@ -19,10 +17,14 @@ type EditCmd struct {
 }
 
 func (c *EditCmd) Run(globals *Globals) error {
+	sess, err := globals.Session()
+	if err != nil {
+		return err
+	}
+
 	ctx := globals.Context()
 
-	// Load existing vars or get empty map
-	vars, err := core.LoadVars(ctx, globals.Config, c.File, globals.Key)
+	vars, err := sess.LoadVars(ctx, c.File)
 	if err != nil {
 		return err
 	}
@@ -30,7 +32,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 	// Format content for editing
 	var content []byte
 	if len(vars) > 0 {
-		content = []byte(env.FormatEnvFile(vars))
+		content = []byte(core.FormatEnvFile(vars))
 	} else {
 		content = []byte(`# Environment Variables
 # Format: KEY=value
@@ -38,13 +40,13 @@ func (c *EditCmd) Run(globals *Globals) error {
 	}
 
 	// Create secure temp file
-	tempFile, err := c.createTempFile(content, globals)
+	tempFile, err := c.createTempFile(content)
 	if err != nil {
 		return err
 	}
 	defer func() {
 		if data, err := os.ReadFile(tempFile); err == nil {
-			utils.WipeData(data)
+			core.WipeData(data)
 		}
 		_ = os.Remove(tempFile)
 	}()
@@ -76,14 +78,14 @@ func (c *EditCmd) Run(globals *Globals) error {
 	if err != nil {
 		return fmt.Errorf("failed to read modified content: %w", err)
 	}
-	defer utils.WipeData(modified)
+	defer core.WipeData(modified)
 
-	newVars, err := env.ParseEnvFile(string(modified))
+	newVars, err := core.ParseEnvFile(string(modified))
 	if err != nil {
 		return fmt.Errorf("invalid environment file format: %w", err)
 	}
 
-	if err := core.SaveVars(ctx, globals.Config, c.File, newVars, globals.Key); err != nil {
+	if err := sess.SaveVars(ctx, c.File, newVars); err != nil {
 		return fmt.Errorf("failed to save changes: %w", err)
 	}
 
@@ -91,9 +93,7 @@ func (c *EditCmd) Run(globals *Globals) error {
 	return nil
 }
 
-// createTempFile creates a secure temporary file with the given content
-func (c *EditCmd) createTempFile(content []byte, globals *Globals) (string, error) {
-	// Create temp file in secure location
+func (c *EditCmd) createTempFile(content []byte) (string, error) {
 	tempDir := os.TempDir()
 	if home, err := os.UserHomeDir(); err == nil {
 		kilnTemp := filepath.Join(home, ".kiln", "tmp")
@@ -102,18 +102,12 @@ func (c *EditCmd) createTempFile(content []byte, globals *Globals) (string, erro
 		}
 	}
 
-	// Create temp file with secure permissions
 	tempFile, err := os.CreateTemp(tempDir, "kiln-edit-*.env")
 	if err != nil {
 		return "", fmt.Errorf("failed to create temp file: %w", err)
 	}
-	defer func() {
-		if err := tempFile.Close(); err != nil {
-			globals.Logger.Debug().Err(err).Msg("failed to close temp file")
-		}
-	}()
+	defer tempFile.Close()
 
-	// Set secure permissions and write content
 	if err := tempFile.Chmod(0600); err != nil {
 		_ = os.Remove(tempFile.Name())
 		return "", fmt.Errorf("failed to set permissions: %w", err)
@@ -127,9 +121,7 @@ func (c *EditCmd) createTempFile(content []byte, globals *Globals) (string, erro
 	return tempFile.Name(), nil
 }
 
-// launchEditor opens the specified editor with the temp file
 func (c *EditCmd) launchEditor(tempFile string, globals *Globals) error {
-	// Determine editor to use
 	var editor string
 	if c.Editor != "" {
 		editor = c.Editor

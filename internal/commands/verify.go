@@ -1,22 +1,18 @@
 package commands
 
-import (
-	"fmt"
-
-	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/core"
-)
+import "fmt"
 
 type VerifyCmd struct {
 	File string `short:"f" help:"Verify specific file"`
 }
 
 func (c *VerifyCmd) Run(globals *Globals) error {
-	cfg, err := config.Load(globals.Config)
+	sess, err := globals.Session()
 	if err != nil {
 		return err
 	}
 
+	cfg := sess.Config()
 	var filesToVerify []string
 	if c.File != "" {
 		filesToVerify = []string{c.File}
@@ -29,7 +25,7 @@ func (c *VerifyCmd) Run(globals *Globals) error {
 	ctx := globals.Context()
 	successful := 0
 	for _, fileName := range filesToVerify {
-		if err := core.CheckFile(ctx, globals.Config, fileName); err != nil {
+		if err := sess.CheckFile(ctx, fileName); err != nil {
 			globals.Logger.Info().Str("file", fileName).Err(err)
 		} else {
 			globals.Logger.Info().Str("file", fileName).Msg("ok")

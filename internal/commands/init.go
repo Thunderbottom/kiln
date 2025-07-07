@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,8 +11,7 @@ import (
 
 	"filippo.io/age"
 	"github.com/thunderbottom/kiln/internal/config"
-	"github.com/thunderbottom/kiln/internal/crypto"
-	"github.com/thunderbottom/kiln/internal/utils"
+	"github.com/thunderbottom/kiln/internal/core"
 	"golang.org/x/term"
 )
 
@@ -40,7 +40,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	}
 
 	// Check if key already exists
-	if utils.FileExists(keyPath) && !c.Force {
+	if core.FileExists(keyPath) && !c.Force {
 		return fmt.Errorf("private key already exists at %s. Overwriting will make existing encrypted files unreadable. Use --force to overwrite (NOT RECOMMENDED)", keyPath)
 	}
 
@@ -60,11 +60,11 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 			return fmt.Errorf("failed to encrypt private key: %w", err)
 		}
 		privateKey = encryptedKey
-		utils.WipeString(identity.String())
+		core.WipeString(identity.String())
 	}
 
 	// Save private key
-	if err := utils.SavePrivateKey(privateKey, keyPath); err != nil {
+	if err := core.SavePrivateKey(privateKey, keyPath); err != nil {
 		return fmt.Errorf("failed to save private key: %w", err)
 	}
 
@@ -151,12 +151,12 @@ func encryptPrivateKey(privateKey string) (string, error) {
 // loadPublicKey loads a public key from either a string or file path
 func loadPublicKey(input string) (string, error) {
 	// Try as direct public key string first
-	if crypto.IsValidPublicKey(input) {
+	if core.IsValidPublicKey(input) {
 		return input, nil
 	}
 
 	// Try as file path
-	if !utils.FileExists(input) {
+	if !core.FileExists(input) {
 		return "", fmt.Errorf("input %s is neither a valid public key nor a readable file", input)
 	}
 
@@ -164,17 +164,17 @@ func loadPublicKey(input string) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("failed to read file %s: %w", input, err)
 	}
-	defer utils.WipeData(data)
+	defer core.WipeData(data)
 
 	content := strings.TrimSpace(string(data))
 
 	// Could be a public key
-	if crypto.IsValidPublicKey(content) {
+	if core.IsValidPublicKey(content) {
 		return content, nil
 	}
 
 	// Could be a plain private key - extract public part
-	if crypto.IsPrivateKey(content) {
+	if core.IsPrivateKey(content) {
 		identity, err := age.ParseX25519Identity(content)
 		if err != nil {
 			return "", fmt.Errorf("invalid private key format in %s: %w", input, err)
@@ -187,11 +187,11 @@ func loadPublicKey(input string) (string, error) {
 		fmt.Printf("Private key at %s is passphrase-protected.\n", input)
 
 		// Decrypt the private key
-		decryptedKey, err := utils.DecryptPrivateKey(content)
+		decryptedKey, err := decryptPrivateKeyFromFile(content)
 		if err != nil {
 			return "", fmt.Errorf("failed to decrypt private key from %s: %w", input, err)
 		}
-		defer utils.WipeString(decryptedKey)
+		defer core.WipeString(decryptedKey)
 
 		// Extract public key from decrypted private key
 		identity, err := age.ParseX25519Identity(decryptedKey)
@@ -202,4 +202,34 @@ func loadPublicKey(input string) (string, error) {
 	}
 
 	return "", fmt.Errorf("file %s does not contain a valid age key", input)
+}
+
+// decryptPrivateKeyFromFile decrypts a passphrase-protected private key from file content
+func decryptPrivateKeyFromFile(encryptedKey string) (string, error) {
+	fmt.Print("Enter passphrase: ")
+	passphrase, err := term.ReadPassword(int(syscall.Stdin))
+	fmt.Println()
+	if err != nil {
+		return "", fmt.Errorf("failed to read passphrase: %w", err)
+	}
+	defer core.WipeData(passphrase)
+
+	identity, err := age.NewScryptIdentity(string(passphrase))
+	if err != nil {
+		return "", fmt.Errorf("failed to create scrypt identity: %w", err)
+	}
+
+	reader := strings.NewReader(encryptedKey)
+	r, err := age.Decrypt(reader, identity)
+	if err != nil {
+		return "", fmt.Errorf("failed to decrypt private key: %w", err)
+	}
+
+	decrypted, err := io.ReadAll(r)
+	if err != nil {
+		return "", fmt.Errorf("failed to read decrypted private key: %w", err)
+	}
+	defer core.WipeData(decrypted)
+
+	return string(decrypted), nil
 }

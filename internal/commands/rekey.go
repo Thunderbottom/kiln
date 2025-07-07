@@ -3,10 +3,7 @@ package commands
 import (
 	"fmt"
 
-	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
-	"github.com/thunderbottom/kiln/internal/crypto"
-	"github.com/thunderbottom/kiln/internal/utils"
 )
 
 type RekeyCmd struct {
@@ -20,14 +17,16 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("--file flag is required")
 	}
 
-	cfg, err := config.Load(globals.Config)
+	sess, err := globals.Session()
 	if err != nil {
-		return fmt.Errorf("failed to load configuration: %w", err)
+		return err
 	}
+
+	cfg := sess.Config()
 
 	// Validate new recipients from CLI
 	for _, recipient := range c.AddRecipient {
-		if err := crypto.ValidatePublicKey(recipient); err != nil {
+		if err := core.ValidatePublicKey(recipient); err != nil {
 			return fmt.Errorf("invalid recipient key %s: %w", recipient, err)
 		}
 		cfg.AddRecipient(recipient)
@@ -40,25 +39,30 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	if !utils.FileExists(envFilePath) {
+	if !core.FileExists(envFilePath) {
 		globals.Logger.Debug().Str("file", c.File).Msg("file does not exist, skipping")
 		return nil
 	}
 
-	// Try to load the file with current key
-	_, loadErr := core.LoadVars(ctx, globals.Config, c.File, globals.Key)
-	if loadErr != nil {
-		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", loadErr)
+	// Try to load the file with current session
+	envVars, err := sess.LoadVars(ctx, c.File)
+	if err != nil {
+		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", err)
 	}
 
-	// Re-encrypt with all recipients in config
-	envVars, err := core.LoadVars(ctx, globals.Config, c.File, globals.Key)
+	// Create new session with updated recipients
+	if err := cfg.Save(globals.Config); err != nil {
+		return fmt.Errorf("failed to save updated config: %w", err)
+	}
+
+	// Create new session with updated config
+	newSess, err := core.NewSession(globals.Config, globals.Key)
 	if err != nil {
-		return fmt.Errorf("failed to load environment variables: %w", err)
+		return fmt.Errorf("failed to create new session with updated recipients: %w", err)
 	}
 
 	// Save with updated recipient list
-	if err := core.SaveVars(ctx, globals.Config, c.File, envVars, globals.Key); err != nil {
+	if err := newSess.SaveVars(ctx, c.File, envVars); err != nil {
 		return fmt.Errorf("failed to save with updated recipients: %w", err)
 	}
 

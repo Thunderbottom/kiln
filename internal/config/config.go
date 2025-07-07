@@ -8,7 +8,6 @@ import (
 	"strings"
 
 	"github.com/BurntSushi/toml"
-	"github.com/thunderbottom/kiln/internal/crypto"
 )
 
 const (
@@ -83,8 +82,15 @@ func (c *Config) Validate() error {
 	}
 
 	for i, recipient := range c.Recipients {
-		if err := crypto.ValidatePublicKey(recipient); err != nil {
-			return fmt.Errorf("recipient %d: %w", i+1, err)
+		recipient = strings.TrimSpace(recipient)
+		if recipient == "" {
+			return fmt.Errorf("recipient %d: empty public key", i+1)
+		}
+		if !strings.HasPrefix(recipient, "age1") {
+			return fmt.Errorf("recipient %d: public key must start with 'age1'", i+1)
+		}
+		if len(recipient) != 62 {
+			return fmt.Errorf("recipient %d: invalid public key length", i+1)
 		}
 	}
 

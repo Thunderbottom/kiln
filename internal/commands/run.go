@@ -8,8 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type RunCmd struct {
@@ -18,7 +16,7 @@ type RunCmd struct {
 	Timeout string   `help:"Timeout for command execution"`
 	WorkDir string   `help:"Working directory for command execution"`
 	Shell   bool     `help:"Run command through shell"`
-	Expand  bool     `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	Expand  bool     `help:"Enable variable expansion (${VAR} syntax)" default:"false"`
 	Command []string `arg:"" help:"Command and arguments to run"`
 }
 
@@ -27,8 +25,13 @@ func (c *RunCmd) Run(globals *Globals) error {
 		return fmt.Errorf("no command specified")
 	}
 
+	sess, err := globals.Session()
+	if err != nil {
+		return err
+	}
+
 	ctx := globals.Context()
-	envVars, err := core.ExportVars(ctx, globals.Config, c.File, globals.Key, c.Expand)
+	envVars, err := sess.ExportVars(ctx, c.File, c.Expand)
 	if err != nil {
 		return err
 	}

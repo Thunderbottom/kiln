@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
@@ -13,27 +12,28 @@ type StatusCmd struct {
 }
 
 func (c *StatusCmd) Run(globals *Globals) error {
-	cfg, err := config.Load(globals.Config)
+	sess, err := globals.Session()
 	if err != nil {
 		return err
 	}
 
+	cfg := sess.Config()
 	globals.Logger.Info().Str("config", globals.Config).Int("recipients", len(cfg.Recipients)).Msg("kiln project status")
 
 	if c.File != "" {
-		return c.showFileStatus(globals, c.File)
+		return c.showFileStatus(globals, sess, c.File)
 	}
 
 	for name := range cfg.Files {
-		if err := c.showFileStatus(globals, name); err != nil {
+		if err := c.showFileStatus(globals, sess, name); err != nil {
 			globals.Logger.Error().Err(err).Str("file", name)
 		}
 	}
 	return nil
 }
 
-func (c *StatusCmd) showFileStatus(globals *Globals, fileName string) error {
-	filePath, info, err := core.GetFileInfo(globals.Config, fileName)
+func (c *StatusCmd) showFileStatus(globals *Globals, sess *core.Session, fileName string) error {
+	filePath, info, err := sess.GetFileInfo(fileName)
 	if os.IsNotExist(err) {
 		globals.Logger.Error().
 			Str("file", fileName).

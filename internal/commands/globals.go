@@ -3,26 +3,25 @@ package commands
 import (
 	"context"
 	"os"
-	"time"
 
 	"github.com/rs/zerolog"
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 // Globals contains global configuration shared across all commands
 type Globals struct {
-	Config string
-	Key    string
-	Logger zerolog.Logger
+	Config  string
+	Key     string
+	Logger  zerolog.Logger
+	session *core.Session // Cached session
 }
 
 // NewGlobals creates a new Globals instance with proper logger setup
 func NewGlobals(config, key string, verbose bool) *Globals {
-	// Configure zerolog for performance
 	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
 
 	var logger zerolog.Logger
-	// Pretty console output for development
-	logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr, TimeFormat: time.RFC3339}).
+	logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
 		With().
 		Timestamp().
 		Logger()
@@ -39,6 +38,21 @@ func NewGlobals(config, key string, verbose bool) *Globals {
 		Key:    key,
 		Logger: logger,
 	}
+}
+
+// Session returns a cached session, creating it if needed
+func (g *Globals) Session() (*core.Session, error) {
+	if g.session != nil {
+		return g.session, nil
+	}
+
+	var err error
+	g.session, err = core.NewSession(g.Config, g.Key)
+	if err != nil {
+		return nil, err
+	}
+
+	return g.session, nil
 }
 
 // Context returns a context with the logger attached

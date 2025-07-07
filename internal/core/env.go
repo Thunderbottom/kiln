@@ -1,4 +1,4 @@
-package env
+package core
 
 import (
 	"bufio"
@@ -7,7 +7,7 @@ import (
 	"strings"
 )
 
-// ParseEnvFile parses environment file content and returns variables
+// ParseEnvFile parses environment file content and returns variables (unexported)
 func ParseEnvFile(content string) (map[string]string, error) {
 	result := make(map[string]string)
 	scanner := bufio.NewScanner(strings.NewReader(content))
@@ -62,7 +62,7 @@ func ParseEnvFile(content string) (map[string]string, error) {
 	return result, nil
 }
 
-// FormatEnvFile formats environment variables back to file format
+// FormatEnvFile formats environment variables back to file format (unexported)
 func FormatEnvFile(vars map[string]string) string {
 	if len(vars) == 0 {
 		return "# Environment Variables\n\n"
@@ -92,7 +92,7 @@ func FormatEnvFile(vars map[string]string) string {
 	return strings.Join(lines, "\n") + "\n"
 }
 
-// needsQuoting checks if a value needs to be quoted
+// needsQuoting checks if a value needs to be quoted (unexported)
 func needsQuoting(value string) bool {
 	if value == "" {
 		return false
@@ -102,7 +102,7 @@ func needsQuoting(value string) bool {
 	return strings.ContainsAny(value, " \t\n\r\"'\\$`")
 }
 
-// escapeValue escapes special characters in a value
+// escapeValue escapes special characters in a value (unexported)
 func escapeValue(value string) string {
 	value = strings.ReplaceAll(value, "\\", "\\\\")
 	value = strings.ReplaceAll(value, "\"", "\\\"")

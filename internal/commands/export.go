@@ -6,33 +6,32 @@ import (
 	"os"
 	"strings"
 
-	"gopkg.in/yaml.v3"
-
-	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
+	"gopkg.in/yaml.v3"
 )
 
 type ExportCmd struct {
 	File   string `short:"f" help:"Environment file to export" default:"default"`
 	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
 	NoMask bool   `help:"Disable masking sensitive values"`
-	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	Expand bool   `help:"Enable variable expansion (${VAR} syntax)" default:"false"`
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
+	sess, err := globals.Session()
+	if err != nil {
+		return err
+	}
+
 	ctx := globals.Context()
-	envVars, err := core.ExportVars(ctx, globals.Config, c.File, globals.Key, c.Expand)
+	envVars, err := sess.ExportVars(ctx, c.File, c.Expand)
 	if err != nil {
 		return err
 	}
 
 	// Apply masking unless disabled
 	if !c.NoMask {
-		cfg, err := config.Load(globals.Config)
-		if err != nil {
-			return fmt.Errorf("failed to load config for masking: %w", err)
-		}
-		envVars = core.MaskVars(envVars, cfg)
+		envVars = sess.MaskVars(envVars)
 	}
 
 	switch c.Format {
@@ -53,7 +52,6 @@ func (c *ExportCmd) Run(globals *Globals) error {
 				globals.Logger.Debug().Err(err).Msg("failed to close yaml encoder")
 			}
 		}()
-
 		return encoder.Encode(envVars)
 	}
 	return nil
