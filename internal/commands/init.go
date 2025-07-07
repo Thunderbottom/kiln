@@ -40,7 +40,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	// Generate key pair
 	privateKey, publicKey, err := core.GenerateKeyPair()
 	if err != nil {
-		return fmt.Errorf("failed to generate key pair: %w", err)
+		return fmt.Errorf("generate key pair: %w", err)
 	}
 	defer core.WipeData(privateKey)
 
@@ -49,7 +49,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	if c.Encrypt {
 		encryptedKey, err := core.EncryptPrivateKey(privateKey)
 		if err != nil {
-			return fmt.Errorf("failed to encrypt private key: %w", err)
+			return fmt.Errorf("encrypt private key: %w", err)
 		}
 		keyToSave = encryptedKey
 		defer core.WipeData(encryptedKey)
@@ -57,7 +57,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 
 	// Save private key
 	if err := core.SavePrivateKey(keyToSave, keyPath); err != nil {
-		return fmt.Errorf("failed to save private key: %w", err)
+		return fmt.Errorf("save private key: %w", err)
 	}
 
 	if !c.Encrypt {
@@ -85,7 +85,7 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 	for _, keyInput := range c.PublicKeys {
 		publicKey, err := core.LoadPublicKey(keyInput)
 		if err != nil {
-			return fmt.Errorf("failed to load key %s: %w", keyInput, err)
+			return fmt.Errorf("load key %s: %w", keyInput, err)
 		}
 		recipients = append(recipients, publicKey)
 	}
@@ -97,7 +97,7 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 	}
 
 	if err := cfg.Save(c.Path); err != nil {
-		return fmt.Errorf("failed to save configuration: %w", err)
+		return fmt.Errorf("save configuration: %w", err)
 	}
 
 	globals.Logger.Info().

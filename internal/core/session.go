@@ -9,79 +9,79 @@ import (
 	"github.com/thunderbottom/kiln/internal/config"
 )
 
-// Session holds a configured crypto manager for a command execution
+// Session holds configuration and crypto manager
 type Session struct {
-	config     *config.Config
-	ageManager *ageManager
+	config *config.Config
+	crypto *AgeManager
 }
 
-// NewSession loads the private key once and creates a reusable session
+// NewSession creates a session with config and private key
 func NewSession(configPath, keyPath string) (*Session, error) {
+	// Load config
 	cfg, err := config.Load(configPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load config: %w", err)
+		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	// Load private key once per session
-	keyAbsPath, err := filepath.Abs(keyPath)
-	if err != nil {
-		return nil, err
-	}
-
+	// Load private key
+	keyAbsPath, _ := filepath.Abs(keyPath)
 	privateKey, err := LoadPrivateKey(keyAbsPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to load private key: %w", err)
+		return nil, fmt.Errorf("load private key: %w", err)
 	}
 	defer WipeData(privateKey)
 
-	// Setup crypto manager once per session
-	ageManager, err := newAgeManager(cfg.Recipients)
+	// Create crypto manager
+	crypto, err := NewAgeManager(cfg.Recipients, privateKey)
 	if err != nil {
-		return nil, err
-	}
-
-	if err := ageManager.addIdentity(privateKey); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("create crypto manager: %w", err)
 	}
 
 	return &Session{
-		config:     cfg,
-		ageManager: ageManager,
+		config: cfg,
+		crypto: crypto,
 	}, nil
 }
 
-// LoadVars loads and decrypts environment variables from file
-func (s *Session) LoadVars(fileName string) (map[string][]byte, error) {
+// LoadVars loads and decrypts environment variables from file with automatic cleanup
+func (s *Session) LoadVars(fileName string) (map[string][]byte, func(), error) {
 	envFilePath, err := s.config.GetEnvFile(fileName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	// Return empty map if file doesn't exist
 	if !FileExists(envFilePath) {
-		return make(map[string][]byte), nil
+		return make(map[string][]byte), func() {}, nil
 	}
 
 	// Read encrypted file
-	encrypted, err := os.ReadFile(envFilePath)
+	encrypted, err := ReadFile(envFilePath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read file: %w", err)
+		return nil, nil, fmt.Errorf("read file: %w", err)
 	}
 
-	// Decrypt using session's cached crypto manager
-	plaintext, err := s.ageManager.decrypt(encrypted)
+	// Decrypt using session's crypto manager
+	plaintext, err := s.crypto.Decrypt(encrypted)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt: %w", err)
+		return nil, nil, fmt.Errorf("decrypt: %w", err)
 	}
 	defer WipeData(plaintext)
 
 	// Parse environment file directly to []byte values
 	vars, err := ParseEnvData(plaintext)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return vars, nil
+	// Create cleanup function
+	cleanup := func() {
+		for _, value := range vars {
+			WipeData(value)
+		}
+	}
+
+	return vars, cleanup, nil
 }
 
 // SaveVars encrypts and saves environment variables to file
@@ -94,49 +94,71 @@ func (s *Session) SaveVars(fileName string, vars map[string][]byte) error {
 	// Format content directly from []byte values
 	content := FormatEnvData(vars)
 
-	// Encrypt using session's cached crypto manager
-	encrypted, err := s.ageManager.encrypt(content)
+	// Encrypt using session's crypto manager
+	encrypted, err := s.crypto.Encrypt(content)
 	if err != nil {
-		return fmt.Errorf("failed to encrypt: %w", err)
+		return fmt.Errorf("encrypt: %w", err)
 	}
 
 	// Save to file
-	return saveFile(envFilePath, encrypted)
+	return WriteFile(envFilePath, encrypted)
 }
 
 // SetVar sets a single environment variable
 func (s *Session) SetVar(fileName, key string, value []byte) error {
-	vars, err := s.LoadVars(fileName)
+	vars, cleanup, err := s.LoadVars(fileName)
 	if err != nil {
 		return err
 	}
-	vars[key] = value
-	return s.SaveVars(fileName, vars)
+	defer cleanup()
+
+	// Create new vars map with the additional/updated value
+	newVars := make(map[string][]byte)
+	for k, v := range vars {
+		newVars[k] = make([]byte, len(v))
+		copy(newVars[k], v)
+	}
+	newVars[key] = make([]byte, len(value))
+	copy(newVars[key], value)
+
+	return s.SaveVars(fileName, newVars)
 }
 
-// GetVar gets a single environment variable
-func (s *Session) GetVar(fileName, key string) ([]byte, error) {
-	vars, err := s.LoadVars(fileName)
+// GetVar gets a single environment variable with automatic cleanup
+func (s *Session) GetVar(fileName, key string) ([]byte, func(), error) {
+	vars, cleanup, err := s.LoadVars(fileName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	value, exists := vars[key]
 	if !exists {
-		return nil, fmt.Errorf("variable %s not found", key)
+		cleanup()
+		return nil, nil, fmt.Errorf("variable %s not found", key)
 	}
-	return value, nil
+
+	// Make a copy for return and clean up the original map
+	valueCopy := make([]byte, len(value))
+	copy(valueCopy, value)
+	cleanup()
+
+	// Return cleanup for the copy
+	valueCleanup := func() {
+		WipeData(valueCopy)
+	}
+
+	return valueCopy, valueCleanup, nil
 }
 
-// ExportVars loads variables with optional expansion
-func (s *Session) ExportVars(fileName string, expand bool) (map[string][]byte, error) {
-	vars, err := s.LoadVars(fileName)
+// ExportVars loads variables with optional expansion and automatic cleanup
+func (s *Session) ExportVars(fileName string, expand bool) (map[string][]byte, func(), error) {
+	vars, cleanup, err := s.LoadVars(fileName)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	if !expand {
-		return vars, nil
+		return vars, cleanup, nil
 	}
 
 	// Apply variable expansion - need string conversion for os.Expand
@@ -161,12 +183,23 @@ func (s *Session) ExportVars(fileName string, expand bool) (map[string][]byte, e
 		result[key] = []byte(value)
 	}
 
-	return result, nil
+	// Create new cleanup that handles both original and result
+	newCleanup := func() {
+		cleanup() // Clean original vars
+		for _, value := range result {
+			WipeData(value)
+		}
+	}
+
+	return result, newCleanup, nil
 }
 
 // CheckFile validates that a file can be decrypted
 func (s *Session) CheckFile(fileName string) error {
-	_, err := s.LoadVars(fileName)
+	_, cleanup, err := s.LoadVars(fileName)
+	if cleanup != nil {
+		defer cleanup()
+	}
 	return err
 }
 

@@ -17,12 +17,8 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 		return fmt.Errorf("--file flag is required")
 	}
 
-	sess, err := globals.Session()
-	if err != nil {
-		return err
-	}
-
-	cfg := sess.Config()
+	cmd := NewCommand(globals)
+	cfg := cmd.Config()
 
 	// Validate new recipients from CLI
 	for _, recipient := range c.AddRecipient {
@@ -39,33 +35,34 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	}
 
 	if !core.FileExists(envFilePath) {
-		globals.Logger.Debug().Str("file", c.File).Msg("file does not exist, skipping")
+		cmd.Logger().Debug().Str("file", c.File).Msg("file does not exist, skipping")
 		return nil
 	}
 
 	// Try to load the file with current session
-	envVars, err := sess.LoadVars(c.File)
+	envVars, cleanup, err := cmd.Session().LoadVars(c.File)
 	if err != nil {
 		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", err)
 	}
+	defer cleanup()
 
 	// Create new session with updated recipients
 	if err := cfg.Save(globals.Config); err != nil {
-		return fmt.Errorf("failed to save updated config: %w", err)
+		return fmt.Errorf("save updated config: %w", err)
 	}
 
 	// Create new session with updated config
 	newSess, err := core.NewSession(globals.Config, globals.Key)
 	if err != nil {
-		return fmt.Errorf("failed to create new session with updated recipients: %w", err)
+		return fmt.Errorf("create new session with updated recipients: %w", err)
 	}
 
 	// Save with updated recipient list
 	if err := newSess.SaveVars(c.File, envVars); err != nil {
-		return fmt.Errorf("failed to save with updated recipients: %w", err)
+		return fmt.Errorf("save with updated recipients: %w", err)
 	}
 
-	globals.Logger.Info().
+	cmd.Logger().Info().
 		Str("file", c.File).
 		Int("recipients", len(cfg.Recipients)).
 		Msg("successfully rekeyed file")

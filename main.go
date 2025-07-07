@@ -41,8 +41,11 @@ func main() {
 		}),
 	)
 
-	globals := commands.NewGlobals(cli.Config, cli.Key, cli.Verbose)
+	globals, err := commands.NewGlobals(cli.Config, cli.Key, cli.Verbose)
+	if err != nil {
+		ctx.Fatalf("failed to initialize: %v", err)
+	}
 
-	err := ctx.Run(globals)
+	err = ctx.Run(globals)
 	ctx.FatalIfErrorf(err)
 }

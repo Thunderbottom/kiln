@@ -7,16 +7,13 @@ type SetCmd struct {
 }
 
 func (c *SetCmd) Run(globals *Globals) error {
-	sess, err := globals.Session()
-	if err != nil {
+	cmd := NewCommand(globals)
+
+	if err := cmd.Session().SetVar(c.File, c.Name, []byte(c.Value)); err != nil {
 		return err
 	}
 
-	if err := sess.SetVar(c.File, c.Name, []byte(c.Value)); err != nil {
-		return err
-	}
-
-	globals.Logger.Info().
+	cmd.Logger().Info().
 		Str("key", c.Name).
 		Str("file", c.File).
 		Msg("environment variable set successfully")

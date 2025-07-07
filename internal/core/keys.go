@@ -21,15 +21,15 @@ func LoadPrivateKey(keyPath string) ([]byte, error) {
 		} else {
 			home, err := os.UserHomeDir()
 			if err != nil {
-				return nil, fmt.Errorf("failed to get home directory: %w", err)
+				return nil, fmt.Errorf("get home directory: %w", err)
 			}
 			keyPath = filepath.Join(home, ".kiln", "kiln.key")
 		}
 	}
 
-	data, err := os.ReadFile(keyPath)
+	data, err := ReadFile(keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read private key file %s: %w", keyPath, err)
+		return nil, fmt.Errorf("read private key file %s: %w", keyPath, err)
 	}
 	defer WipeData(data)
 
@@ -59,9 +59,9 @@ func LoadPublicKey(input string) (string, error) {
 		return "", fmt.Errorf("input %s is neither a valid public key nor a readable file", input)
 	}
 
-	data, err := os.ReadFile(input)
+	data, err := ReadFile(input)
 	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", input, err)
+		return "", fmt.Errorf("read file %s: %w", input, err)
 	}
 	defer WipeData(data)
 
@@ -88,7 +88,7 @@ func LoadPublicKey(input string) (string, error) {
 		// Decrypt the private key
 		decryptedKey, err := decryptPrivateKey(content)
 		if err != nil {
-			return "", fmt.Errorf("failed to decrypt private key from %s: %w", input, err)
+			return "", fmt.Errorf("decrypt private key from %s: %w", input, err)
 		}
 		defer WipeData(decryptedKey)
 
@@ -107,7 +107,7 @@ func LoadPublicKey(input string) (string, error) {
 func GenerateKeyPair() (privateKey []byte, publicKey string, err error) {
 	identity, err := age.GenerateX25519Identity()
 	if err != nil {
-		return nil, "", fmt.Errorf("failed to generate key pair: %w", err)
+		return nil, "", fmt.Errorf("generate key pair: %w", err)
 	}
 
 	return []byte(identity.String()), identity.Recipient().String(), nil
@@ -151,24 +151,29 @@ func decryptPrivateKey(encryptedKey string) ([]byte, error) {
 	passphrase, err := term.ReadPassword(int(syscall.Stdin))
 	fmt.Println()
 	if err != nil {
-		return nil, fmt.Errorf("failed to read passphrase: %w", err)
+		return nil, fmt.Errorf("read passphrase: %w", err)
 	}
 	defer WipeData(passphrase)
 
+	// Check for empty passphrase
+	if len(passphrase) == 0 {
+		return nil, fmt.Errorf("passphrase cannot be empty")
+	}
+
 	identity, err := age.NewScryptIdentity(string(passphrase))
 	if err != nil {
-		return nil, fmt.Errorf("failed to create scrypt identity: %w", err)
+		return nil, fmt.Errorf("create scrypt identity: %w", err)
 	}
 
 	reader := strings.NewReader(encryptedKey)
 	r, err := age.Decrypt(reader, identity)
 	if err != nil {
-		return nil, fmt.Errorf("failed to decrypt private key: %w", err)
+		return nil, fmt.Errorf("decrypt private key: %w", err)
 	}
 
 	decrypted, err := io.ReadAll(r)
 	if err != nil {
-		return nil, fmt.Errorf("failed to read decrypted private key: %w", err)
+		return nil, fmt.Errorf("read decrypted private key: %w", err)
 	}
 
 	return decrypted, nil
@@ -176,12 +181,7 @@ func decryptPrivateKey(encryptedKey string) ([]byte, error) {
 
 // SavePrivateKey saves a private key to a file with secure permissions
 func SavePrivateKey(privateKey []byte, filename string) error {
-	dir := filepath.Dir(filename)
-	if err := os.MkdirAll(dir, 0700); err != nil {
-		return err
-	}
-
 	// Add newline to the []byte data
 	data := append(privateKey, '\n')
-	return os.WriteFile(filename, data, 0600)
+	return WriteFile(filename, data)
 }

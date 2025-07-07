@@ -14,11 +14,11 @@ type Globals struct {
 	Config  string
 	Key     string
 	Logger  zerolog.Logger
-	session *core.Session // Cached session
+	session *core.Session
 }
 
 // NewGlobals creates a new Globals instance with proper logger setup
-func NewGlobals(config, key string, verbose bool) *Globals {
+func NewGlobals(config, key string, verbose bool) (*Globals, error) {
 	logLevel := zerolog.InfoLevel
 	if verbose {
 		logLevel = zerolog.DebugLevel
@@ -39,22 +39,22 @@ func NewGlobals(config, key string, verbose bool) *Globals {
 		Config: config,
 		Key:    key,
 		Logger: logger.Logger(),
-	}
+	}, nil
 }
 
 // Session returns a cached session, creating it if needed
-func (g *Globals) Session() (*core.Session, error) {
+func (g *Globals) Session() *core.Session {
 	if g.session != nil {
-		return g.session, nil
+		return g.session
 	}
 
 	var err error
 	g.session, err = core.NewSession(g.Config, g.Key)
 	if err != nil {
-		return nil, err
+		g.Logger.Fatal().Err(err).Msg("failed to create session")
 	}
 
-	return g.session, nil
+	return g.session
 }
 
 // Context returns a context with the logger attached

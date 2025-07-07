@@ -17,20 +17,17 @@ type ExportCmd struct {
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
-	sess, err := globals.Session()
-	if err != nil {
-		return err
-	}
+	cmd := NewCommand(globals)
 
-	envVars, err := sess.ExportVars(c.File, c.Expand)
+	envVars, cleanup, err := cmd.Session().ExportVars(c.File, c.Expand)
 	if err != nil {
 		return err
 	}
+	defer cleanup()
 
 	stringVars := make(map[string]string)
 	for key, value := range envVars {
 		stringVars[key] = string(value)
-		defer core.WipeData(value)
 	}
 
 	switch c.Format {

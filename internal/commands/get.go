@@ -4,8 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-
-	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type GetCmd struct {
@@ -15,16 +13,13 @@ type GetCmd struct {
 }
 
 func (c *GetCmd) Run(globals *Globals) error {
-	sess, err := globals.Session()
-	if err != nil {
-		return err
-	}
+	cmd := NewCommand(globals)
 
-	value, err := sess.GetVar(c.File, c.Name)
+	value, cleanup, err := cmd.Session().GetVar(c.File, c.Name)
 	if err != nil {
 		return err
 	}
-	defer core.WipeData(value)
+	defer cleanup()
 
 	switch c.Format {
 	case "value":

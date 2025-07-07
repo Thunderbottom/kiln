@@ -16,23 +16,14 @@ type EditCmd struct {
 }
 
 func (c *EditCmd) Run(globals *Globals) error {
-	sess, err := globals.Session()
-	if err != nil {
-		return err
-	}
+	cmd := NewCommand(globals)
 
 	// Load existing variables
-	vars, err := sess.LoadVars(c.File)
+	vars, cleanup, err := cmd.Session().LoadVars(c.File)
 	if err != nil {
 		return err
 	}
-
-	// Ensure all values are wiped when we're done
-	defer func() {
-		for _, value := range vars {
-			core.WipeData(value)
-		}
-	}()
+	defer cleanup()
 
 	// Convert to string format for editing
 	stringVars := make(map[string]string)
@@ -53,43 +44,43 @@ func (c *EditCmd) Run(globals *Globals) error {
 	// Create secure temp file
 	tempFile, err := os.CreateTemp("", "*.env")
 	if err != nil {
-		return fmt.Errorf("failed to create temp file: %w", err)
+		return fmt.Errorf("create temp file: %w", err)
 	}
 
 	// Simple cleanup with defer and signal handling
 	tempFileName := tempFile.Name()
 	cleaned := false
-	cleanup := func() {
+	cleanupTemp := func() {
 		if !cleaned {
 			_ = tempFile.Close()
 			_ = os.Remove(tempFileName)
 			cleaned = true
 		}
 	}
-	defer cleanup()
+	defer cleanupTemp()
 
 	// Setup simple signal handling for cleanup
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigChan
-		cleanup()
+		cleanupTemp()
 		os.Exit(130) // 128 + SIGINT(2)
 	}()
 
 	// Write content to temp file
 	if _, err := tempFile.Write(content); err != nil {
-		return fmt.Errorf("failed to write content to temp file: %w", err)
+		return fmt.Errorf("write content to temp file: %w", err)
 	}
 
 	if err := tempFile.Close(); err != nil {
-		return fmt.Errorf("failed to close temp file: %w", err)
+		return fmt.Errorf("close temp file: %w", err)
 	}
 
 	// Get modification time before editing
 	beforeStat, err := os.Stat(tempFileName)
 	if err != nil {
-		return fmt.Errorf("failed to stat temp file: %w", err)
+		return fmt.Errorf("stat temp file: %w", err)
 	}
 
 	// Determine editor to use
@@ -103,31 +94,31 @@ func (c *EditCmd) Run(globals *Globals) error {
 	}
 
 	// Launch editor
-	globals.Logger.Debug().Str("editor", editor).Msg("launching editor")
-	cmd := exec.Command(editor, tempFileName)
-	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Logger().Debug().Str("editor", editor).Msg("launching editor")
+	execCmd := exec.Command(editor, tempFileName)
+	execCmd.Stdin = os.Stdin
+	execCmd.Stdout = os.Stdout
+	execCmd.Stderr = os.Stderr
 
-	if err := cmd.Run(); err != nil {
+	if err := execCmd.Run(); err != nil {
 		return fmt.Errorf("editor failed: %w", err)
 	}
 
 	// Check if file was modified
 	afterStat, err := os.Stat(tempFileName)
 	if err != nil {
-		return fmt.Errorf("failed to stat temp file after editing: %w", err)
+		return fmt.Errorf("stat temp file after editing: %w", err)
 	}
 
 	if !afterStat.ModTime().After(beforeStat.ModTime()) {
-		globals.Logger.Info().Msg("no changes detected")
+		cmd.Logger().Info().Msg("no changes detected")
 		return nil
 	}
 
 	// Read and save changes
 	modified, err := os.ReadFile(tempFileName)
 	if err != nil {
-		return fmt.Errorf("failed to read modified content: %w", err)
+		return fmt.Errorf("read modified content: %w", err)
 	}
 	defer core.WipeData(modified)
 
@@ -141,17 +132,10 @@ func (c *EditCmd) Run(globals *Globals) error {
 		newVars[key] = []byte(value)
 	}
 
-	// Ensure new values are wiped when done
-	defer func() {
-		for _, value := range newVars {
-			core.WipeData(value)
-		}
-	}()
-
-	if err := sess.SaveVars(c.File, newVars); err != nil {
-		return fmt.Errorf("failed to save changes: %w", err)
+	if err := cmd.Session().SaveVars(c.File, newVars); err != nil {
+		return fmt.Errorf("save changes: %w", err)
 	}
 
-	globals.Logger.Info().Str("file", c.File).Msg("environment file updated")
+	cmd.Logger().Info().Str("file", c.File).Msg("environment file updated")
 	return nil
 }

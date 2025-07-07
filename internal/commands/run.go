@@ -8,8 +8,6 @@ import (
 	"strings"
 	"syscall"
 	"time"
-
-	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type RunCmd struct {
@@ -27,24 +25,16 @@ func (c *RunCmd) Run(globals *Globals) error {
 		return fmt.Errorf("no command specified")
 	}
 
-	sess, err := globals.Session()
+	cmd := NewCommand(globals)
+
+	envVars, cleanup, err := cmd.Session().ExportVars(c.File, c.Expand)
 	if err != nil {
 		return err
 	}
-
-	envVars, err := sess.ExportVars(c.File, c.Expand)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		for _, value := range envVars {
-			core.WipeData(value)
-		}
-	}()
+	defer cleanup()
 
 	if c.DryRun {
-		globals.Logger.Info().
+		cmd.Logger().Info().
 			Str("cmd", strings.Join(c.Command, " ")).
 			Int("variables", len(envVars)).
 			Msg("dry run mode enabled")
@@ -54,16 +44,16 @@ func (c *RunCmd) Run(globals *Globals) error {
 			if len(displayValue) > 50 {
 				displayValue = displayValue[:47] + "..."
 			}
-			globals.Logger.Info().Str("key", key).Str("value", displayValue).Msg("environment variable")
+			cmd.Logger().Info().Str("key", key).Str("value", displayValue).Msg("environment variable")
 		}
 
 		return nil
 	}
 
-	return c.executeCommand(envVars, globals)
+	return c.executeCommand(envVars, cmd)
 }
 
-func (c *RunCmd) executeCommand(envVars map[string][]byte, globals *Globals) error {
+func (c *RunCmd) executeCommand(envVars map[string][]byte, command Command) error {
 	ctx := context.Background()
 	if c.Timeout != "" {
 		duration, err := time.ParseDuration(c.Timeout)
@@ -96,9 +86,9 @@ func (c *RunCmd) executeCommand(envVars map[string][]byte, globals *Globals) err
 		cmd.Dir = c.WorkDir
 	}
 
-	globals.Logger.Debug().Str("cmd", strings.Join(c.Command, " ")).Msg("executing command")
+	command.Logger().Debug().Str("cmd", strings.Join(c.Command, " ")).Msg("executing command")
 	if c.Expand {
-		globals.Logger.Debug().Msg("variable expansion applied")
+		command.Logger().Debug().Msg("variable expansion applied")
 	}
 
 	err := cmd.Run()
