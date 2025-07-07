@@ -14,7 +14,7 @@ type ExportCmd struct {
 	File   string `short:"f" help:"Environment file to export" default:"default"`
 	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
 	NoMask bool   `help:"Disable masking sensitive values"`
-	Expand bool   `help:"Enable variable expansion (${VAR} syntax)" default:"false"`
+	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {

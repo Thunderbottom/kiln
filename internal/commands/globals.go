@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"os"
+	"time"
 
 	"github.com/rs/zerolog"
 	"github.com/thunderbottom/kiln/internal/core"
@@ -18,25 +19,26 @@ type Globals struct {
 
 // NewGlobals creates a new Globals instance with proper logger setup
 func NewGlobals(config, key string, verbose bool) *Globals {
-	zerolog.TimeFieldFormat = zerolog.TimeFormatUnix
-
-	var logger zerolog.Logger
-	logger = zerolog.New(zerolog.ConsoleWriter{Out: os.Stderr}).
-		With().
-		Timestamp().
-		Logger()
-
-	// Set global log level based on verbose flag
+	logLevel := zerolog.InfoLevel
 	if verbose {
-		zerolog.SetGlobalLevel(zerolog.DebugLevel)
-		logger = logger.With().
-			Caller().Logger()
+		logLevel = zerolog.DebugLevel
+	}
+	zerolog.SetGlobalLevel(logLevel)
+
+	consoleWriter := zerolog.ConsoleWriter{
+		Out:        os.Stderr,
+		TimeFormat: time.RFC3339,
+	}
+
+	logger := zerolog.New(consoleWriter).With().Timestamp()
+	if verbose {
+		logger = logger.Caller()
 	}
 
 	return &Globals{
 		Config: config,
 		Key:    key,
-		Logger: logger,
+		Logger: logger.Logger(),
 	}
 }
 

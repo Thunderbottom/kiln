@@ -16,7 +16,7 @@ var (
 type CLI struct {
 	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml" type:"path"`
 	Key     string `short:"k" help:"Path to private key file" default:"~/.kiln/kiln.key" type:"path"`
-	Verbose bool   `short:"v" help:"Verbose output"`
+	Verbose bool   `short:"v" help:"Verbose output" default:"false"`
 
 	Init    commands.InitCmd   `cmd:"" help:"Initialize new kiln project"`
 	Edit    commands.EditCmd   `cmd:"" help:"Edit encrypted environment variables"`

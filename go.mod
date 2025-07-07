@@ -6,6 +6,7 @@ require (
 	filippo.io/age v1.2.1
 	github.com/BurntSushi/toml v1.5.0
 	github.com/alecthomas/kong v1.12.0
+	github.com/joho/godotenv v1.5.1
 	github.com/rs/zerolog v1.34.0
 	golang.org/x/term v0.28.0
 	gopkg.in/yaml.v3 v3.0.1
