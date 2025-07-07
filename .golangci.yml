@@ -1,7 +1,5 @@
-# golangci-lint v2 configuration for kiln project
 version: "2"
 
-# Options for analysis running
 run:
   timeout: 5m
   issues-exit-code: 1
@@ -10,7 +8,6 @@ run:
   relative-path-mode: gomod
   allow-parallel-runners: false
 
-# Output configuration
 output:
   formats:
     text:
@@ -23,9 +20,7 @@ output:
     - file
   show-stats: true
 
-# Linters configuration
 linters:
-  # Default set of linters - using 'standard' for balanced approach
   default: standard
   
   # Enable additional linters beyond standard
@@ -244,13 +239,10 @@ linters:
 
   # Exclusion rules for linters
   exclusions:
-    # Be lenient with generated files
     generated: lax
     
-    # Log warnings for unused exclusion rules
     warn-unused: true
     
-    # Exclude specific issues per path/linter/text
     rules:
       # Disable linters for test files
       - path: _test\.go
@@ -289,14 +281,11 @@ linters:
           - lll
         source: "^//go:generate "
 
-# Formatters configuration (separate from linters in v2)
 formatters:
-  # Enable specific formatters
   enable:
     - gofumpt    # Enhanced gofmt with additional rules
     - goimports  # Automatically add/remove imports
     
-  # Formatter settings
   settings:
     # gofumpt settings
     gofumpt:
@@ -315,7 +304,6 @@ formatters:
     # Log warnings for unused exclusion paths
     warn-unused: true
 
-# Issues configuration
 issues:
   # No limit on issues per linter
   max-issues-per-linter: 0
@@ -329,7 +317,6 @@ issues:
   # Don't auto-fix in CI/CD
   fix: false
 
-# Severity configuration
 severity:
   # Default severity for all issues
   default: error
