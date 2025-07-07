@@ -14,13 +14,13 @@ import (
 
 // RunCmd represents the run command for executing programs with encrypted environment variables.
 type RunCmd struct {
-	File    string   `short:"f" help:"Environment file to use" default:"default"`
-	DryRun  bool     `help:"Show environment variables without running command"`
-	Timeout string   `help:"Timeout for command execution"`
-	WorkDir string   `help:"Working directory for command execution"`
-	Shell   bool     `help:"Run command through shell"`
-	Expand  bool     `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
-	Command []string `arg:"" help:"Command and arguments to run"`
+	File    string        `short:"f" help:"Environment file to use" default:"default"`
+	DryRun  bool          `help:"Show environment variables without running command"`
+	Timeout time.Duration `help:"Timeout for command execution" placeholder:"[10s]"`
+	WorkDir string        `help:"Working directory for command execution" placeholder:"[path]"`
+	Shell   bool          `help:"Run command through shell"`
+	Expand  bool          `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
+	Command []string      `arg:"" help:"Command and arguments to run"`
 }
 
 // ExitError represents a command exit with a specific code.
@@ -115,30 +115,25 @@ func (c *RunCmd) executeCommand(variables map[string][]byte, globals *Globals) e
 	return c.runCommand(cmd, globals)
 }
 
+// createContext sets up a cancellable context with optional timeout and signal handling for command execution.
 func (c *RunCmd) createContext(globals *Globals) context.Context {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 	_ = cancel // Will be called when context is done
 
-	if c.Timeout != "" {
-		duration, err := time.ParseDuration(c.Timeout)
-		if err != nil {
-			globals.Logger.Error().Err(err).Msg("invalid timeout format")
-
-			return ctx
-		}
-
+	if c.Timeout > 0 {
 		var timeoutCancel context.CancelFunc
-		ctx, timeoutCancel = context.WithTimeout(ctx, duration)
-		_ = timeoutCancel // Will be called when context is done
+		ctx, timeoutCancel = context.WithTimeout(ctx, c.Timeout)
+		_ = timeoutCancel
 
 		globals.Logger.Debug().
-			Str("timeout", c.Timeout).
+			Dur("timeout", c.Timeout).
 			Msg("command timeout configured")
 	}
 
 	return ctx
 }
 
+// buildCommand creates an exec.Cmd for the specified command, optionally wrapping it in a shell.
 func (c *RunCmd) buildCommand(ctx context.Context, globals *Globals) *exec.Cmd {
 	var cmd *exec.Cmd
 
@@ -159,6 +154,7 @@ func (c *RunCmd) buildCommand(ctx context.Context, globals *Globals) *exec.Cmd {
 	return cmd
 }
 
+// setupEnvironment configures the command's environment variables by combining system env with decrypted variables.
 func (c *RunCmd) setupEnvironment(cmd *exec.Cmd, variables map[string][]byte) {
 	cmd.Env = os.Environ()
 	for key, value := range variables {
@@ -200,6 +196,7 @@ func (c *RunCmd) runCommand(cmd *exec.Cmd, globals *Globals) error {
 	return nil
 }
 
+// handleCommandError processes command execution errors and converts exit codes to appropriate error types.
 func (c *RunCmd) handleCommandError(err error, globals *Globals) error {
 	var exitError *exec.ExitError
 	if errors.As(err, &exitError) {

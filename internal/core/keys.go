@@ -66,10 +66,6 @@ func LoadPublicKey(input string) (string, error) {
 		return input, nil
 	}
 
-	if !FileExists(input) {
-		return "", fmt.Errorf("file is neither a valid public key nor a readable file")
-	}
-
 	data, err := ReadFile(input)
 	if err != nil {
 		return "", fmt.Errorf("read file %s: %w", input, err)
@@ -158,6 +154,7 @@ func EncryptPrivateKey(privateKey []byte) ([]byte, error) {
 	return buf.Bytes(), nil
 }
 
+// decryptPrivateKey decrypts a passphrase-protected age private key using user-provided passphrase.
 func decryptPrivateKey(encryptedKey string) ([]byte, error) {
 	fmt.Print("Enter passphrase: ")
 

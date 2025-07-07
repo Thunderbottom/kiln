@@ -8,8 +8,8 @@ import (
 
 // RekeyCmd represents the rekey command for rotating encryption keys.
 type RekeyCmd struct {
-	File         string   `short:"f" help:"Environment file to rekey"`
-	AddRecipient []string `help:"Add new recipient public keys"`
+	File         string   `short:"f" help:"Environment file to rekey" placeholder:"default"`
+	AddRecipient []string `help:"Add new recipient public keys" placeholder:"[age-pub-key]"`
 	Force        bool     `help:"Force rekey without confirmation"`
 }
 

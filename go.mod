@@ -1,6 +1,6 @@
 module github.com/thunderbottom/kiln
 
-go 1.24.4
+go 1.23
 
 require (
 	filippo.io/age v1.2.1

@@ -7,6 +7,7 @@ import (
 	"github.com/alecthomas/kong"
 
 	"github.com/thunderbottom/kiln/internal/commands"
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 var (
@@ -17,8 +18,8 @@ var (
 
 // CLI represents the command-line interface structure for the kiln tool.
 type CLI struct {
-	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml" type:"path"`
-	Key     string `short:"k" help:"Path to private key file" default:"~/.kiln/kiln.key" type:"path"`
+	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml" type:"existingfile" placeholder:"[path-to-file]"`
+	Key     string `short:"k" help:"Path to private key file" default:"~/.kiln/kiln.key" type:"existingfile" placeholder:"[path-to-file]"`
 	Verbose bool   `short:"v" help:"Verbose output" default:"false"`
 
 	Init    commands.InitCmd   `cmd:"" help:"Initialize new kiln project"`
@@ -38,6 +39,7 @@ func main() {
 		kong.Name("kiln"),
 		kong.Description("Secure environment variable management tool"),
 		kong.Vars{"version": fmt.Sprintf("%s (%s, built %s)", version, commit, date)},
+		kong.NamedMapper("agepubkey", core.AgePublicKeyMapper),
 		kong.UsageOnError(),
 		kong.ConfigureHelp(kong.HelpOptions{
 			Compact: true,

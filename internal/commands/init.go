@@ -24,7 +24,7 @@ type InitKeyCmd struct {
 // InitConfigCmd represents the config generation subcommand of init.
 type InitConfigCmd struct {
 	Path       string   `help:"Path for config file" default:"kiln.toml"`
-	PublicKeys []string `help:"Path to public key file(s) or public key strings" required:""`
+	PublicKeys []string `help:"Path to public key file(s) or public key strings" type:"agepubkey" required:""`
 	Force      bool     `help:"Overwrite existing config"`
 }
 
@@ -120,30 +120,7 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 		return fmt.Errorf("configuration already exists. Use --force to overwrite")
 	}
 
-	recipients := make([]string, 0, len(c.PublicKeys))
-
-	for i, keyInput := range c.PublicKeys {
-		globals.Logger.Debug().
-			Int("index", i).
-			Str("input", keyInput).
-			Msg("loading public key")
-
-		publicKey, err := core.LoadPublicKey(keyInput)
-		if err != nil {
-			globals.Logger.Error().
-				Err(err).
-				Str("input", keyInput).
-				Msg("failed to load public key")
-
-			return fmt.Errorf("load key %s: %w", keyInput, err)
-		}
-
-		recipients = append(recipients, publicKey)
-
-		globals.Logger.Debug().
-			Str("public_key", publicKey).
-			Msg("public key loaded successfully")
-	}
+	recipients := c.PublicKeys
 
 	cfg := config.NewConfig()
 	for _, recipient := range recipients {

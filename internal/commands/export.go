@@ -13,8 +13,8 @@ import (
 
 // ExportCmd represents the export command for outputting environment variables.
 type ExportCmd struct {
-	File   string `short:"f" help:"Environment file to export" default:"default"`
-	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
+	File   string `short:"f" help:"Environment file from the configuration to export" default:"default"`
+	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell" placeholder:"[shell|json|yaml]"`
 	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
 }
 

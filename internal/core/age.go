@@ -4,9 +4,11 @@ import (
 	"bytes"
 	"fmt"
 	"io"
+	"reflect"
 	"strings"
 
 	"filippo.io/age"
+	"github.com/alecthomas/kong"
 )
 
 // AgeManager handles all Age encryption/decryption operations
@@ -84,6 +86,7 @@ func (am *AgeManager) Decrypt(data []byte) ([]byte, error) {
 	return result, nil
 }
 
+// parseRecipients converts a slice of public key strings into age.Recipient objects for encryption.
 func parseRecipients(publicKeys []string) ([]age.Recipient, error) {
 	if len(publicKeys) == 0 {
 		return nil, fmt.Errorf("no public keys provided")
@@ -140,3 +143,31 @@ func IsValidPublicKey(key string) bool {
 func IsPrivateKey(key string) bool {
 	return strings.HasPrefix(strings.TrimSpace(key), "AGE-SECRET-KEY-")
 }
+
+// AgePublicKeyMapper is a Kong mapper that validates and resolves age public keys.
+// It accepts either a direct age public key string or a file path containing a public key.
+// If a file path is provided, it loads and validates the key from the file.
+// This mapper enables the "agepubkey" type tag in Kong CLI definitions.
+var AgePublicKeyMapper = kong.MapperFunc(func(ctx *kong.DecodeContext, target reflect.Value) error {
+	var value string
+	if err := ctx.Scan.PopValueInto("string", &value); err != nil {
+		return err
+	}
+
+	// Try as direct public key first
+	if IsValidPublicKey(value) {
+		target.SetString(value)
+
+		return nil
+	}
+
+	// Try loading from file
+	publicKey, err := LoadPublicKey(value)
+	if err != nil {
+		return fmt.Errorf("invalid public key or file: %w", err)
+	}
+
+	target.SetString(publicKey)
+
+	return nil
+})

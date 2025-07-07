@@ -15,7 +15,7 @@ import (
 // EditCmd represents the edit command for modifying encrypted environment variables.
 type EditCmd struct {
 	File   string `short:"f" help:"Environment file to edit" default:"default"`
-	Editor string `help:"Editor to use"`
+	Editor string `help:"Editor to use for editing the file, defaults to the EDITOR environment variable" placeholder:"EDITOR"`
 }
 
 // Run executes the edit command, opening an editor to modify environment variables.
@@ -65,6 +65,7 @@ func (c *EditCmd) prepareContent(session *core.Session) ([]byte, error) {
 	return []byte("# Environment Variables\n# Format: KEY=value\n"), nil
 }
 
+// createTempFile creates a temporary file with the provided content and returns cleanup function.
 func (c *EditCmd) createTempFile(content []byte, globals *Globals) (*os.File, func(), error) {
 	tempFile, err := os.CreateTemp("", "*.env")
 	if err != nil {
@@ -131,6 +132,7 @@ func (c *EditCmd) writeAndCloseTempFile(tempFile *os.File, content []byte, globa
 	return nil
 }
 
+// setupSignalHandling configures interrupt signal handling to ensure proper cleanup of temporary files.
 func (c *EditCmd) setupSignalHandling(cleanupTemp func(), globals *Globals) (context.Context, func()) {
 	ctx, cancel := context.WithCancel(context.Background())
 	signalDone := make(chan struct{})
@@ -180,6 +182,7 @@ func (c *EditCmd) launchEditor(ctx context.Context, tempFileName string, globals
 	return c.executeEditor(ctx, editor, tempFileName, globals)
 }
 
+// determineEditor selects the editor to use based on command flag or EDITOR environment variable.
 func (c *EditCmd) determineEditor(globals *Globals) string {
 	if c.Editor != "" {
 		globals.Logger.Debug().
@@ -200,6 +203,7 @@ func (c *EditCmd) determineEditor(globals *Globals) string {
 	return ""
 }
 
+// executeEditor launches the specified editor with the temporary file and waits for completion.
 func (c *EditCmd) executeEditor(ctx context.Context, editor, tempFileName string, globals *Globals) error {
 	execCmd := exec.CommandContext(ctx, editor, tempFileName)
 	execCmd.Stdin = os.Stdin
@@ -230,6 +234,7 @@ func (c *EditCmd) executeEditor(ctx context.Context, editor, tempFileName string
 	return nil
 }
 
+// processChanges detects file modifications and saves updated environment variables if changes were made.
 func (c *EditCmd) processChanges(session *core.Session, tempFileName string, beforeStat os.FileInfo, globals *Globals) error {
 	afterStat, err := os.Stat(tempFileName)
 	if err != nil {

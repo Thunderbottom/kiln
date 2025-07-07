@@ -46,7 +46,7 @@ fmt:
 	go fmt ./...
 
 lint:
-	golangci-lint run
+	golangci-lint run ./...
 
 mod-tidy:
 	go mod tidy
