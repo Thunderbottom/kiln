@@ -2,7 +2,6 @@ package core
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"strings"
@@ -141,6 +140,5 @@ func IsValidPublicKey(key string) bool {
 
 // IsPrivateKey checks if a string looks like an age private key
 func IsPrivateKey(key string) bool {
-	key = strings.TrimSpace(key)
-	return strings.HasPrefix(key, "AGE-SECRET-KEY-")
+	return strings.HasPrefix(strings.TrimSpace(key), "AGE-SECRET-KEY-")
 }

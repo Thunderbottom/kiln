@@ -1,7 +1,6 @@
 package core
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -29,7 +28,7 @@ func NewSession(configPath, keyPath string) (*Session, error) {
 		return nil, err
 	}
 
-	privateKey, err := loadPrivateKey(keyAbsPath)
+	privateKey, err := LoadPrivateKey(keyAbsPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to load private key: %w", err)
 	}
@@ -52,7 +51,7 @@ func NewSession(configPath, keyPath string) (*Session, error) {
 }
 
 // LoadVars loads and decrypts environment variables from file
-func (s *Session) LoadVars(ctx context.Context, fileName string) (map[string][]byte, error) {
+func (s *Session) LoadVars(fileName string) (map[string][]byte, error) {
 	envFilePath, err := s.config.GetEnvFile(fileName)
 	if err != nil {
 		return nil, err
@@ -76,39 +75,27 @@ func (s *Session) LoadVars(ctx context.Context, fileName string) (map[string][]b
 	}
 	defer WipeData(plaintext)
 
-	// Parse environment file and convert to []byte values
-	stringVars, err := ParseEnvFile(string(plaintext))
+	// Parse environment file directly to []byte values
+	vars, err := ParseEnvData(plaintext)
 	if err != nil {
 		return nil, err
-	}
-
-	// Convert string values to []byte
-	vars := make(map[string][]byte)
-	for key, value := range stringVars {
-		vars[key] = []byte(value)
 	}
 
 	return vars, nil
 }
 
 // SaveVars encrypts and saves environment variables to file
-func (s *Session) SaveVars(ctx context.Context, fileName string, vars map[string][]byte) error {
+func (s *Session) SaveVars(fileName string, vars map[string][]byte) error {
 	envFilePath, err := s.config.GetEnvFile(fileName)
 	if err != nil {
 		return err
 	}
 
-	// Convert []byte values to string for formatting
-	stringVars := make(map[string]string)
-	for key, value := range vars {
-		stringVars[key] = string(value)
-	}
-
-	// Format content
-	content := FormatEnvFile(stringVars)
+	// Format content directly from []byte values
+	content := FormatEnvData(vars)
 
 	// Encrypt using session's cached crypto manager
-	encrypted, err := s.ageManager.encrypt([]byte(content))
+	encrypted, err := s.ageManager.encrypt(content)
 	if err != nil {
 		return fmt.Errorf("failed to encrypt: %w", err)
 	}
@@ -118,18 +105,18 @@ func (s *Session) SaveVars(ctx context.Context, fileName string, vars map[string
 }
 
 // SetVar sets a single environment variable
-func (s *Session) SetVar(ctx context.Context, fileName, key string, value []byte) error {
-	vars, err := s.LoadVars(ctx, fileName)
+func (s *Session) SetVar(fileName, key string, value []byte) error {
+	vars, err := s.LoadVars(fileName)
 	if err != nil {
 		return err
 	}
 	vars[key] = value
-	return s.SaveVars(ctx, fileName, vars)
+	return s.SaveVars(fileName, vars)
 }
 
 // GetVar gets a single environment variable
-func (s *Session) GetVar(ctx context.Context, fileName, key string) ([]byte, error) {
-	vars, err := s.LoadVars(ctx, fileName)
+func (s *Session) GetVar(fileName, key string) ([]byte, error) {
+	vars, err := s.LoadVars(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -142,8 +129,8 @@ func (s *Session) GetVar(ctx context.Context, fileName, key string) ([]byte, err
 }
 
 // ExportVars loads variables with optional expansion
-func (s *Session) ExportVars(ctx context.Context, fileName string, expand bool) (map[string][]byte, error) {
-	vars, err := s.LoadVars(ctx, fileName)
+func (s *Session) ExportVars(fileName string, expand bool) (map[string][]byte, error) {
+	vars, err := s.LoadVars(fileName)
 	if err != nil {
 		return nil, err
 	}
@@ -152,7 +139,7 @@ func (s *Session) ExportVars(ctx context.Context, fileName string, expand bool) 
 		return vars, nil
 	}
 
-	// Apply variable expansion
+	// Apply variable expansion - need string conversion for os.Expand
 	stringVars := make(map[string]string)
 	for key, value := range vars {
 		stringVars[key] = string(value)
@@ -178,8 +165,8 @@ func (s *Session) ExportVars(ctx context.Context, fileName string, expand bool) 
 }
 
 // CheckFile validates that a file can be decrypted
-func (s *Session) CheckFile(ctx context.Context, fileName string) error {
-	_, err := s.LoadVars(ctx, fileName)
+func (s *Session) CheckFile(fileName string) error {
+	_, err := s.LoadVars(fileName)
 	return err
 }
 

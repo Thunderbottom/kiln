@@ -33,7 +33,6 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	}
 
 	// Check if we can currently decrypt the file
-	ctx := globals.Context()
 	envFilePath, err := cfg.GetEnvFile(c.File)
 	if err != nil {
 		return err
@@ -45,7 +44,7 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	}
 
 	// Try to load the file with current session
-	envVars, err := sess.LoadVars(ctx, c.File)
+	envVars, err := sess.LoadVars(c.File)
 	if err != nil {
 		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", err)
 	}
@@ -62,7 +61,7 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	}
 
 	// Save with updated recipient list
-	if err := newSess.SaveVars(ctx, c.File, envVars); err != nil {
+	if err := newSess.SaveVars(c.File, envVars); err != nil {
 		return fmt.Errorf("failed to save with updated recipients: %w", err)
 	}
 

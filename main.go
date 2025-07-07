@@ -25,8 +25,7 @@ type CLI struct {
 	Set     commands.SetCmd    `cmd:"" help:"Set an environment variable"`
 	Get     commands.GetCmd    `cmd:"" help:"Get an environment variable"`
 	Rekey   commands.RekeyCmd  `cmd:"" help:"Rotate encryption keys"`
-	Status  commands.StatusCmd `cmd:"" help:"Show project status"`
-	Verify  commands.VerifyCmd `cmd:"" help:"Verify encrypted files"`
+	Info    commands.InfoCmd   `cmd:"" help:"Show project and file information"`
 	Version kong.VersionFlag   `help:"Show version"`
 }
 

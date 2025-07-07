@@ -1,18 +1,11 @@
 package commands
 
 import (
-	"bytes"
 	"fmt"
-	"io"
-	"os"
 	"path/filepath"
-	"strings"
-	"syscall"
 
-	"filippo.io/age"
 	"github.com/thunderbottom/kiln/internal/config"
 	"github.com/thunderbottom/kiln/internal/core"
-	"golang.org/x/term"
 )
 
 type InitCmd struct {
@@ -45,29 +38,27 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	}
 
 	// Generate key pair
-	identity, err := age.GenerateX25519Identity()
+	privateKey, publicKey, err := core.GenerateKeyPair()
 	if err != nil {
 		return fmt.Errorf("failed to generate key pair: %w", err)
 	}
+	defer core.WipeData(privateKey)
 
-	privateKey := []byte(identity.String())
-	publicKey := identity.Recipient().String()
-
+	// Encrypt private key if requested
+	keyToSave := privateKey
 	if c.Encrypt {
-		encryptedKey, err := encryptPrivateKey(string(privateKey))
+		encryptedKey, err := core.EncryptPrivateKey(privateKey)
 		if err != nil {
-			core.WipeData(privateKey) // Wipe original
 			return fmt.Errorf("failed to encrypt private key: %w", err)
 		}
-		privateKey = []byte(encryptedKey)
-		core.WipeData(privateKey) // Wipe original unencrypted key
+		keyToSave = encryptedKey
+		defer core.WipeData(encryptedKey)
 	}
 
 	// Save private key
-	if err := core.SavePrivateKey(privateKey, keyPath); err != nil {
+	if err := core.SavePrivateKey(keyToSave, keyPath); err != nil {
 		return fmt.Errorf("failed to save private key: %w", err)
 	}
-	core.WipeData(privateKey)
 
 	if !c.Encrypt {
 		globals.Logger.Warn().Msg("private key is NOT password protected")
@@ -89,10 +80,10 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 		return fmt.Errorf("configuration already exists at %s. Use --force to overwrite", c.Path)
 	}
 
-	// Load all public keys
+	// Load all public keys using consolidated function
 	var recipients []string
 	for _, keyInput := range c.PublicKeys {
-		publicKey, err := loadPublicKey(keyInput)
+		publicKey, err := core.LoadPublicKey(keyInput)
 		if err != nil {
 			return fmt.Errorf("failed to load key %s: %w", keyInput, err)
 		}
@@ -115,122 +106,4 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 		Msg("configuration created")
 
 	return nil
-}
-
-// encryptPrivateKey encrypts a private key using age's native passphrase protection
-func encryptPrivateKey(privateKey string) (string, error) {
-	// Let age handle passphrase prompting and generation
-	fmt.Print("Enter passphrase (leave empty to autogenerate): ")
-	passphrase, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println()
-	if err != nil {
-		return "", err
-	}
-
-	recipient, err := age.NewScryptRecipient(string(passphrase))
-	if err != nil {
-		return "", err
-	}
-
-	var buf bytes.Buffer
-	w, err := age.Encrypt(&buf, recipient)
-	if err != nil {
-		return "", err
-	}
-
-	if _, err := w.Write([]byte(privateKey)); err != nil {
-		return "", err
-	}
-
-	if err := w.Close(); err != nil {
-		return "", err
-	}
-
-	return buf.String(), nil
-}
-
-// loadPublicKey loads a public key from either a string or file path
-func loadPublicKey(input string) (string, error) {
-	// Try as direct public key string first
-	if core.IsValidPublicKey(input) {
-		return input, nil
-	}
-
-	// Try as file path
-	if !core.FileExists(input) {
-		return "", fmt.Errorf("input %s is neither a valid public key nor a readable file", input)
-	}
-
-	data, err := os.ReadFile(input)
-	if err != nil {
-		return "", fmt.Errorf("failed to read file %s: %w", input, err)
-	}
-	defer core.WipeData(data)
-
-	content := strings.TrimSpace(string(data))
-
-	// Could be a public key
-	if core.IsValidPublicKey(content) {
-		return content, nil
-	}
-
-	// Could be a plain private key - extract public part
-	if core.IsPrivateKey(content) {
-		identity, err := age.ParseX25519Identity(content)
-		if err != nil {
-			return "", fmt.Errorf("invalid private key format in %s: %w", input, err)
-		}
-		return identity.Recipient().String(), nil
-	}
-
-	// Could be a passphrase-encrypted identity file
-	if strings.Contains(content, "age-encryption.org/v1") {
-		fmt.Printf("Private key at %s is passphrase-protected.\n", input)
-
-		// Decrypt the private key
-		decryptedKey, err := decryptPrivateKeyFromFile(content)
-		if err != nil {
-			return "", fmt.Errorf("failed to decrypt private key from %s: %w", input, err)
-		}
-		defer core.WipeString(decryptedKey)
-
-		// Extract public key from decrypted private key
-		identity, err := age.ParseX25519Identity(decryptedKey)
-		if err != nil {
-			return "", fmt.Errorf("invalid decrypted private key format in %s: %w", input, err)
-		}
-		return identity.Recipient().String(), nil
-	}
-
-	return "", fmt.Errorf("file %s does not contain a valid age key", input)
-}
-
-// decryptPrivateKeyFromFile decrypts a passphrase-protected private key from file content
-func decryptPrivateKeyFromFile(encryptedKey string) (string, error) {
-	fmt.Print("Enter passphrase: ")
-	passphrase, err := term.ReadPassword(int(syscall.Stdin))
-	fmt.Println()
-	if err != nil {
-		return "", fmt.Errorf("failed to read passphrase: %w", err)
-	}
-	defer core.WipeData(passphrase)
-
-	identity, err := age.NewScryptIdentity(string(passphrase))
-	if err != nil {
-		return "", fmt.Errorf("failed to create scrypt identity: %w", err)
-	}
-
-	reader := strings.NewReader(encryptedKey)
-	r, err := age.Decrypt(reader, identity)
-	if err != nil {
-		return "", fmt.Errorf("failed to decrypt private key: %w", err)
-	}
-
-	decrypted, err := io.ReadAll(r)
-	if err != nil {
-		return "", fmt.Errorf("failed to read decrypted private key: %w", err)
-	}
-	defer core.WipeData(decrypted)
-
-	return string(decrypted), nil
 }

@@ -22,8 +22,7 @@ func (c *ExportCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	ctx := globals.Context()
-	envVars, err := sess.ExportVars(ctx, c.File, c.Expand)
+	envVars, err := sess.ExportVars(c.File, c.Expand)
 	if err != nil {
 		return err
 	}
@@ -47,7 +46,7 @@ func (c *ExportCmd) Run(globals *Globals) error {
 		return encoder.Encode(stringVars)
 	case "yaml":
 		encoder := yaml.NewEncoder(os.Stdout)
-		defer encoder.Close()
+		defer func() { _ = encoder.Close() }()
 		return encoder.Encode(stringVars)
 	}
 	return nil

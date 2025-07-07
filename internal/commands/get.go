@@ -20,8 +20,7 @@ func (c *GetCmd) Run(globals *Globals) error {
 		return err
 	}
 
-	ctx := globals.Context()
-	value, err := sess.GetVar(ctx, c.File, c.Name)
+	value, err := sess.GetVar(c.File, c.Name)
 	if err != nil {
 		return err
 	}
