@@ -1,3 +1,5 @@
+// Package config handles kiln configuration file management, including loading, saving,
+// and validating configuration files that specify recipients and environment file mappings.
 package config
 
 import (
@@ -11,8 +13,10 @@ import (
 )
 
 const (
+	// DefaultConfigFile is the default name for kiln configuration files.
 	DefaultConfigFile = "kiln.toml"
-	DefaultEnvFile    = ".kiln.env"
+	// DefaultEnvFile is the default name for encrypted environment files.
+	DefaultEnvFile = ".kiln.env"
 )
 
 // Config represents the kiln configuration
@@ -53,7 +57,7 @@ func Load(path string) (*Config, error) {
 // Save writes the configuration to a file
 func (c *Config) Save(path string) error {
 	dir := filepath.Dir(path)
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return err
 	}
 
@@ -62,7 +66,7 @@ func (c *Config) Save(path string) error {
 		return err
 	}
 
-	return os.WriteFile(path, data, 0600)
+	return os.WriteFile(path, data, 0o600)
 }
 
 // Validate checks if the configuration is valid
@@ -85,6 +89,7 @@ func (c *Config) AddRecipient(recipient string) {
 	if slices.Contains(c.Recipients, recipient) {
 		return
 	}
+
 	c.Recipients = append(c.Recipients, recipient)
 }
 
@@ -93,9 +98,11 @@ func (c *Config) RemoveRecipient(recipient string) bool {
 	for i, r := range c.Recipients {
 		if r == recipient {
 			c.Recipients = append(c.Recipients[:i], c.Recipients[i+1:]...)
+
 			return true
 		}
 	}
+
 	return false
 }
 
@@ -122,6 +129,8 @@ func Exists(path string) bool {
 	if path == "" {
 		path = DefaultConfigFile
 	}
+
 	_, err := os.Stat(path)
+
 	return err == nil
 }

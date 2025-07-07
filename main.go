@@ -1,9 +1,11 @@
+// Package main provides the kiln CLI tool for secure environment variable management.
 package main
 
 import (
 	"fmt"
 
 	"github.com/alecthomas/kong"
+
 	"github.com/thunderbottom/kiln/internal/commands"
 )
 
@@ -13,6 +15,7 @@ var (
 	date    = "unknown"
 )
 
+// CLI represents the command-line interface structure for the kiln tool.
 type CLI struct {
 	Config  string `short:"c" help:"Configuration file path" default:"kiln.toml" type:"path"`
 	Key     string `short:"k" help:"Path to private key file" default:"~/.kiln/kiln.key" type:"path"`

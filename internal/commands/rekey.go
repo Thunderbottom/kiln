@@ -6,12 +6,14 @@ import (
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
+// RekeyCmd represents the rekey command for rotating encryption keys.
 type RekeyCmd struct {
 	File         string   `short:"f" help:"Environment file to rekey"`
 	AddRecipient []string `help:"Add new recipient public keys"`
 	Force        bool     `help:"Force rekey without confirmation"`
 }
 
+// Run executes the rekey command, re-encrypting files with updated recipients.
 func (c *RekeyCmd) Run(globals *Globals) error {
 	if c.File == "" {
 		return fmt.Errorf("--file flag is required")
@@ -25,9 +27,10 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 	cfg := session.Config()
 
 	for _, recipient := range c.AddRecipient {
-		if err := core.ValidatePublicKey(recipient); err != nil {
-			return fmt.Errorf("invalid recipient key %s: %w", recipient, err)
+		if validateErr := core.ValidatePublicKey(recipient); validateErr != nil {
+			return fmt.Errorf("invalid recipient key %s: %w", recipient, validateErr)
 		}
+
 		cfg.AddRecipient(recipient)
 	}
 
@@ -38,25 +41,26 @@ func (c *RekeyCmd) Run(globals *Globals) error {
 
 	if !core.FileExists(envFilePath) {
 		globals.Logger.Debug().Str("file", c.File).Msg("file does not exist, skipping")
+
 		return nil
 	}
 
-	envVars, cleanup, err := session.LoadVars(c.File)
-	if err != nil {
-		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", err)
+	envVars, cleanup, loadErr := session.LoadVars(c.File)
+	if loadErr != nil {
+		return fmt.Errorf("cannot decrypt file with current key - ensure you have access: %w", loadErr)
 	}
 	defer cleanup()
 
-	if err := cfg.Save(globals.Config); err != nil {
-		return fmt.Errorf("save updated config: %w", err)
+	if saveErr := cfg.Save(globals.Config); saveErr != nil {
+		return fmt.Errorf("save updated config: %w", saveErr)
 	}
 
-	newSess, err := core.NewSession(globals.Config, globals.Key)
+	newSession, err := core.NewSession(globals.Config, globals.Key)
 	if err != nil {
 		return fmt.Errorf("create new session with updated recipients: %w", err)
 	}
 
-	if err := newSess.SaveVars(c.File, envVars); err != nil {
+	if err := newSession.SaveVars(c.File, envVars); err != nil {
 		return fmt.Errorf("save with updated recipients: %w", err)
 	}
 

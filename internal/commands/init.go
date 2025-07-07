@@ -8,23 +8,27 @@ import (
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
+// InitCmd represents the init command for initializing kiln projects.
 type InitCmd struct {
 	Key    *InitKeyCmd    `cmd:"" help:"Generate encryption key"`
 	Config *InitConfigCmd `cmd:"" help:"Generate configuration file"`
 }
 
+// InitKeyCmd represents the key generation subcommand of init.
 type InitKeyCmd struct {
 	Path    string `help:"Path for private key" default:"~/.kiln/kiln.key" type:"path"`
 	Encrypt bool   `help:"Save key with passphrase protection"`
 	Force   bool   `help:"Overwrite existing key (dangerous!)"`
 }
 
+// InitConfigCmd represents the config generation subcommand of init.
 type InitConfigCmd struct {
 	Path       string   `help:"Path for config file" default:"kiln.toml"`
 	PublicKeys []string `help:"Path to public key file(s) or public key strings" required:""`
 	Force      bool     `help:"Overwrite existing config"`
 }
 
+// Run executes the init key command, generating a new encryption key pair.
 func (c *InitKeyCmd) Run(globals *Globals) error {
 	keyPath, err := filepath.Abs(c.Path)
 	if err != nil {
@@ -41,6 +45,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 		globals.Logger.Error().
 			Str("key_path", keyPath).
 			Msg("private key already exists")
+
 		return fmt.Errorf("private key already exists. Overwriting will make existing encrypted files unreadable. Use --force to overwrite (NOT RECOMMENDED)")
 	}
 
@@ -49,6 +54,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 		globals.Logger.Error().
 			Err(err).
 			Msg("failed to generate key pair")
+
 		return fmt.Errorf("generate key pair: %w", err)
 	}
 	defer core.WipeData(privateKey)
@@ -56,16 +62,21 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	globals.Logger.Debug().Msg("key pair generated successfully")
 
 	keyData := privateKey
+
 	if c.Encrypt {
 		globals.Logger.Debug().Msg("encrypting private key with passphrase")
+
 		encryptedKey, err := core.EncryptPrivateKey(privateKey)
 		if err != nil {
 			globals.Logger.Error().
 				Err(err).
 				Msg("failed to encrypt private key")
+
 			return fmt.Errorf("encrypt private key: %w", err)
 		}
+
 		keyData = encryptedKey
+
 		defer core.WipeData(encryptedKey)
 		globals.Logger.Debug().Msg("private key encrypted successfully")
 	}
@@ -75,6 +86,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 			Err(err).
 			Str("key_path", keyPath).
 			Msg("failed to save private key")
+
 		return fmt.Errorf("save private key: %w", err)
 	}
 
@@ -92,6 +104,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 	return nil
 }
 
+// Run executes the init config command, creating a new configuration file.
 func (c *InitConfigCmd) Run(globals *Globals) error {
 	globals.Logger.Debug().
 		Str("config_path", c.Path).
@@ -103,10 +116,12 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 		globals.Logger.Error().
 			Str("config_path", c.Path).
 			Msg("configuration already exists")
+
 		return fmt.Errorf("configuration already exists. Use --force to overwrite")
 	}
 
-	var recipients []string
+	recipients := make([]string, 0, len(c.PublicKeys))
+
 	for i, keyInput := range c.PublicKeys {
 		globals.Logger.Debug().
 			Int("index", i).
@@ -119,8 +134,10 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 				Err(err).
 				Str("input", keyInput).
 				Msg("failed to load public key")
+
 			return fmt.Errorf("load key %s: %w", keyInput, err)
 		}
+
 		recipients = append(recipients, publicKey)
 
 		globals.Logger.Debug().
@@ -138,6 +155,7 @@ func (c *InitConfigCmd) Run(globals *Globals) error {
 			Err(err).
 			Str("config_path", c.Path).
 			Msg("failed to save configuration")
+
 		return fmt.Errorf("save configuration: %w", err)
 	}
 

@@ -28,5 +28,6 @@ func FormatEnv(vars map[string][]byte) []byte {
 	if err != nil {
 		return nil
 	}
+
 	return []byte(content)
 }

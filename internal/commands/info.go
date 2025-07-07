@@ -7,11 +7,13 @@ import (
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
+// InfoCmd represents the info command for displaying project and file information.
 type InfoCmd struct {
 	File   string `short:"f" help:"Show info for specific file"`
 	Verify bool   `help:"Verify file decryption capability" default:"false"`
 }
 
+// Run executes the info command, showing file status and verification details.
 func (c *InfoCmd) Run(globals *Globals) error {
 	session, err := globals.Session()
 	if err != nil {
@@ -35,6 +37,7 @@ func (c *InfoCmd) Run(globals *Globals) error {
 		for name := range cfg.Files {
 			filesToCheck = append(filesToCheck, name)
 		}
+
 		globals.Logger.Debug().
 			Int("file_count", len(filesToCheck)).
 			Msg("checking all configured files")
@@ -54,6 +57,7 @@ func (c *InfoCmd) Run(globals *Globals) error {
 				Err(err).
 				Str("file", fileName).
 				Msg("failed to get file info")
+
 			failed++
 		} else {
 			successful++
@@ -83,12 +87,14 @@ func (c *InfoCmd) showFileInfo(session *core.Session, globals *Globals, fileName
 			Str("file", fileName).
 			Str("path", filePath).
 			Msg("file not found")
+
 		return nil
 	} else if err != nil {
 		globals.Logger.Error().
 			Err(err).
 			Str("file", fileName).
 			Msg("failed to get file info")
+
 		return err
 	}
 
@@ -110,11 +116,12 @@ func (c *InfoCmd) showFileInfo(session *core.Session, globals *Globals, fileName
 			logger.Str("status", "failed").
 				Err(err).
 				Msg("file info with verification")
+
 			return err
-		} else {
-			logger.Str("status", "ok").
-				Msg("file info with verification")
 		}
+
+		logger.Str("status", "ok").
+			Msg("file info with verification")
 	} else {
 		logger.Msg("file info")
 	}

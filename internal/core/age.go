@@ -44,6 +44,7 @@ func (am *AgeManager) Encrypt(data []byte) ([]byte, error) {
 	}
 
 	var buf bytes.Buffer
+
 	w, err := age.Encrypt(&buf, am.recipients...)
 	if err != nil {
 		return nil, fmt.Errorf("encrypt: %w", err)
@@ -104,6 +105,7 @@ func parseRecipients(publicKeys []string) ([]age.Recipient, error) {
 		if err != nil {
 			return nil, fmt.Errorf("invalid public key %s: %w", key, err)
 		}
+
 		recipients = append(recipients, recipient)
 	}
 

@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"time"
 )
 
+// RunCmd represents the run command for executing programs with encrypted environment variables.
 type RunCmd struct {
 	File    string   `short:"f" help:"Environment file to use" default:"default"`
 	DryRun  bool     `help:"Show environment variables without running command"`
@@ -21,6 +23,17 @@ type RunCmd struct {
 	Command []string `arg:"" help:"Command and arguments to run"`
 }
 
+// ExitError represents a command exit with a specific code.
+type ExitError struct {
+	Code int
+}
+
+// Error returns a custom error message with an exit code.
+func (e *ExitError) Error() string {
+	return fmt.Sprintf("command exited with code %d", e.Code)
+}
+
+// Run executes the run command, loading environment variables and executing the specified command.
 func (c *RunCmd) Run(globals *Globals) error {
 	if len(c.Command) == 0 {
 		return fmt.Errorf("no command specified")
@@ -44,6 +57,7 @@ func (c *RunCmd) Run(globals *Globals) error {
 			Err(err).
 			Str("file", c.File).
 			Msg("failed to load environment variables")
+
 		return err
 	}
 	defer cleanup()
@@ -53,44 +67,81 @@ func (c *RunCmd) Run(globals *Globals) error {
 		Msg("environment variables loaded")
 
 	if c.DryRun {
-		globals.Logger.Info().
-			Str("command", strings.Join(c.Command, " ")).
-			Int("variables", len(variables)).
-			Msg("dry run mode enabled")
-
-		for key, value := range variables {
-			displayValue := string(value)
-			if len(displayValue) > 50 {
-				displayValue = displayValue[:47] + "..."
-			}
-			globals.Logger.Info().Str("variable", key).Str("value", displayValue).Msg("environment variable")
-		}
+		c.showDryRun(variables, globals)
 
 		return nil
 	}
 
-	return c.executeCommand(variables, globals)
+	exitErr := c.executeCommand(variables, globals)
+	if exitErr != nil {
+		var exitError *ExitError
+		if errors.As(exitErr, &exitError) {
+			// Let deferred functions run, then exit
+			defer func() {
+				os.Exit(exitError.Code)
+			}()
+
+			return nil
+		}
+
+		return exitErr
+	}
+
+	return nil
+}
+
+func (c *RunCmd) showDryRun(variables map[string][]byte, globals *Globals) {
+	globals.Logger.Info().
+		Str("command", strings.Join(c.Command, " ")).
+		Int("variables", len(variables)).
+		Msg("dry run mode enabled")
+
+	for key, value := range variables {
+		displayValue := string(value)
+		if len(displayValue) > 50 {
+			displayValue = displayValue[:47] + "..."
+		}
+
+		globals.Logger.Info().Str("variable", key).Str("value", displayValue).Msg("environment variable")
+	}
 }
 
 func (c *RunCmd) executeCommand(variables map[string][]byte, globals *Globals) error {
+	ctx := c.createContext(globals)
+	cmd := c.buildCommand(ctx, globals)
+	c.setupEnvironment(cmd, variables)
+	c.configureCommand(cmd, globals)
+
+	return c.runCommand(cmd, globals)
+}
+
+func (c *RunCmd) createContext(globals *Globals) context.Context {
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
-	defer cancel()
+	_ = cancel // Will be called when context is done
 
 	if c.Timeout != "" {
 		duration, err := time.ParseDuration(c.Timeout)
 		if err != nil {
-			return fmt.Errorf("invalid timeout: %w", err)
+			globals.Logger.Error().Err(err).Msg("invalid timeout format")
+
+			return ctx
 		}
+
 		var timeoutCancel context.CancelFunc
 		ctx, timeoutCancel = context.WithTimeout(ctx, duration)
-		defer timeoutCancel()
+		_ = timeoutCancel // Will be called when context is done
 
 		globals.Logger.Debug().
 			Str("timeout", c.Timeout).
 			Msg("command timeout configured")
 	}
 
+	return ctx
+}
+
+func (c *RunCmd) buildCommand(ctx context.Context, globals *Globals) *exec.Cmd {
 	var cmd *exec.Cmd
+
 	if c.Shell {
 		commandString := strings.Join(c.Command, " ")
 		cmd = exec.CommandContext(ctx, "/bin/sh", "-c", commandString)
@@ -105,11 +156,17 @@ func (c *RunCmd) executeCommand(variables map[string][]byte, globals *Globals) e
 			Msg("executing command directly")
 	}
 
+	return cmd
+}
+
+func (c *RunCmd) setupEnvironment(cmd *exec.Cmd, variables map[string][]byte) {
 	cmd.Env = os.Environ()
 	for key, value := range variables {
 		cmd.Env = append(cmd.Env, fmt.Sprintf("%s=%s", key, string(value)))
 	}
+}
 
+func (c *RunCmd) configureCommand(cmd *exec.Cmd, globals *Globals) {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
@@ -120,10 +177,11 @@ func (c *RunCmd) executeCommand(variables map[string][]byte, globals *Globals) e
 			Str("workdir", c.WorkDir).
 			Msg("working directory set")
 	}
+}
 
+func (c *RunCmd) runCommand(cmd *exec.Cmd, globals *Globals) error {
 	globals.Logger.Debug().
 		Str("command", strings.Join(c.Command, " ")).
-		Int("env_vars", len(variables)).
 		Msg("executing command")
 
 	if c.Expand {
@@ -132,19 +190,7 @@ func (c *RunCmd) executeCommand(variables map[string][]byte, globals *Globals) e
 
 	err := cmd.Run()
 	if err != nil {
-		if exitError, ok := err.(*exec.ExitError); ok {
-			if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
-				globals.Logger.Debug().
-					Int("exit_code", status.ExitStatus()).
-					Msg("command exited with non-zero status")
-				os.Exit(status.ExitStatus())
-			}
-		}
-		globals.Logger.Error().
-			Err(err).
-			Str("command", strings.Join(c.Command, " ")).
-			Msg("command execution failed")
-		return fmt.Errorf("command failed: %w", err)
+		return c.handleCommandError(err, globals)
 	}
 
 	globals.Logger.Debug().
@@ -152,4 +198,26 @@ func (c *RunCmd) executeCommand(variables map[string][]byte, globals *Globals) e
 		Msg("command executed successfully")
 
 	return nil
+}
+
+func (c *RunCmd) handleCommandError(err error, globals *Globals) error {
+	var exitError *exec.ExitError
+	if errors.As(err, &exitError) {
+		if status, ok := exitError.Sys().(syscall.WaitStatus); ok {
+			globals.Logger.Debug().
+				Int("exit_code", status.ExitStatus()).
+				Msg("command exited with non-zero status")
+
+			// NOTE: calling os.Exit() directly causes defer
+			// to fail, so we return the error instead
+			return &ExitError{Code: status.ExitStatus()}
+		}
+	}
+
+	globals.Logger.Error().
+		Err(err).
+		Str("command", strings.Join(c.Command, " ")).
+		Msg("command execution failed")
+
+	return fmt.Errorf("command failed: %w", err)
 }

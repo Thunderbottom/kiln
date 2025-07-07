@@ -6,16 +6,19 @@ import (
 	"os"
 	"strings"
 
-	"github.com/thunderbottom/kiln/internal/core"
 	"gopkg.in/yaml.v3"
+
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
+// ExportCmd represents the export command for outputting environment variables.
 type ExportCmd struct {
 	File   string `short:"f" help:"Environment file to export" default:"default"`
 	Format string `help:"Output format" enum:"shell,json,yaml" default:"shell"`
 	Expand bool   `help:"Enable variable expansion ($${VAR} syntax)" default:"false"`
 }
 
+// Run executes the export command, outputting variables in the specified format.
 func (c *ExportCmd) Run(globals *Globals) error {
 	session, err := globals.Session()
 	if err != nil {
@@ -34,6 +37,7 @@ func (c *ExportCmd) Run(globals *Globals) error {
 			Err(err).
 			Str("file", c.File).
 			Msg("failed to export variables")
+
 		return err
 	}
 	defer cleanup()
@@ -58,10 +62,16 @@ func (c *ExportCmd) Run(globals *Globals) error {
 	case "json":
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
+
 		return encoder.Encode(stringVariables)
 	case "yaml":
 		encoder := yaml.NewEncoder(os.Stdout)
-		defer func() { _ = encoder.Close() }()
+		defer func() {
+			if err := encoder.Close(); err != nil {
+				globals.Logger.Debug().Err(err).Msg("failed to close yaml encoder")
+			}
+		}()
+
 		return encoder.Encode(stringVariables)
 	}
 

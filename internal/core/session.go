@@ -1,3 +1,6 @@
+// Package core provides the fundamental encryption, decryption, and session management
+// functionality for kiln. It handles Age encryption operations, environment variable
+// parsing, and secure data handling with automatic cleanup.
 package core
 
 import (
@@ -22,11 +25,16 @@ func NewSession(configPath, keyPath string) (*Session, error) {
 		return nil, fmt.Errorf("load config: %w", err)
 	}
 
-	keyAbsPath, _ := filepath.Abs(keyPath)
+	keyAbsPath, err := filepath.Abs(keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("find private key: %w", err)
+	}
+
 	privateKey, err := LoadPrivateKey(keyAbsPath)
 	if err != nil {
 		return nil, fmt.Errorf("load private key: %w", err)
 	}
+
 	defer WipeData(privateKey)
 
 	crypto, err := NewAgeManager(cfg.Recipients, privateKey)
@@ -106,6 +114,7 @@ func (s *Session) SetVar(fileName, key string, value []byte) error {
 		updatedVariables[k] = make([]byte, len(v))
 		copy(updatedVariables[k], v)
 	}
+
 	updatedVariables[key] = make([]byte, len(value))
 	copy(updatedVariables[key], value)
 
@@ -122,6 +131,7 @@ func (s *Session) GetVar(fileName, key string) ([]byte, func(), error) {
 	value, exists := variables[key]
 	if !exists {
 		cleanup()
+
 		return nil, nil, fmt.Errorf("variable %s not found", key)
 	}
 
@@ -158,6 +168,7 @@ func (s *Session) ExportVars(fileName string, expand bool) (map[string][]byte, f
 			if val, exists := stringVariables[expandKey]; exists {
 				return val
 			}
+
 			return os.Getenv(expandKey)
 		})
 	}
@@ -169,6 +180,7 @@ func (s *Session) ExportVars(fileName string, expand bool) (map[string][]byte, f
 
 	newCleanup := func() {
 		cleanup()
+
 		for _, value := range result {
 			WipeData(value)
 		}
@@ -183,6 +195,7 @@ func (s *Session) CheckFile(fileName string) error {
 	if cleanup != nil {
 		defer cleanup()
 	}
+
 	return err
 }
 
@@ -194,6 +207,7 @@ func (s *Session) GetFileInfo(fileName string) (string, os.FileInfo, error) {
 	}
 
 	info, err := os.Stat(filePath)
+
 	return filePath, info, err
 }
 
@@ -208,6 +222,8 @@ func SortedKeys(variables map[string][]byte) []string {
 	for key := range variables {
 		keys = append(keys, key)
 	}
+
 	sort.Strings(keys)
+
 	return keys
 }

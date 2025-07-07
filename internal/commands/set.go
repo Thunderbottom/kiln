@@ -4,16 +4,19 @@ import (
 	"fmt"
 	"syscall"
 
-	"github.com/thunderbottom/kiln/internal/core"
 	"golang.org/x/term"
+
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
+// SetCmd represents the set command for adding or updating environment variables.
 type SetCmd struct {
 	Name  string `arg:"" help:"Environment variable name"`
 	Value string `arg:"" help:"Environment variable value (if not provided, will prompt for input)" optional:""`
 	File  string `short:"f" help:"Environment file to modify" default:"default"`
 }
 
+// Run executes the set command, prompting for and storing an environment variable.
 func (c *SetCmd) Run(globals *Globals) error {
 	session, err := globals.Session()
 	if err != nil {
@@ -39,8 +42,10 @@ func (c *SetCmd) Run(globals *Globals) error {
 				Err(err).
 				Str("variable", c.Name).
 				Msg("failed to read value from stdin")
+
 			return fmt.Errorf("read value from stdin: %w", err)
 		}
+
 		globals.Logger.Debug().
 			Str("variable", c.Name).
 			Msg("value read from stdin")
@@ -53,6 +58,7 @@ func (c *SetCmd) Run(globals *Globals) error {
 			Str("variable", c.Name).
 			Str("file", c.File).
 			Msg("failed to set variable")
+
 		return err
 	}
 
@@ -66,10 +72,14 @@ func (c *SetCmd) Run(globals *Globals) error {
 
 func (c *SetCmd) readValueFromStdin() ([]byte, error) {
 	fmt.Printf("Enter value for %s: ", c.Name)
-	value, err := term.ReadPassword(int(syscall.Stdin))
+
+	value, err := term.ReadPassword(syscall.Stdin)
+
 	fmt.Println()
+
 	if err != nil {
 		return nil, fmt.Errorf("read password: %w", err)
 	}
+
 	return value, nil
 }

@@ -1,3 +1,6 @@
+// Package commands implements all CLI commands for the kiln secure environment variable management tool.
+// It provides subcommands for initializing projects, editing encrypted files, running commands with
+// decrypted environment variables, and managing encryption keys.
 package commands
 
 import (
@@ -6,6 +9,7 @@ import (
 	"time"
 
 	"github.com/rs/zerolog"
+
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
@@ -23,6 +27,7 @@ func NewGlobals(config, key string, verbose bool) (*Globals, error) {
 	if verbose {
 		logLevel = zerolog.DebugLevel
 	}
+
 	zerolog.SetGlobalLevel(logLevel)
 
 	consoleWriter := zerolog.ConsoleWriter{
@@ -50,6 +55,7 @@ func (g *Globals) Session() (*core.Session, error) {
 
 	var err error
 	g.session, err = core.NewSession(g.Config, g.Key)
+
 	return g.session, err
 }
 

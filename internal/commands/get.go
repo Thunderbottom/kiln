@@ -8,12 +8,14 @@ import (
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
+// GetCmd represents the get command for retrieving a single environment variable.
 type GetCmd struct {
 	Name   string `arg:"" help:"Environment variable name"`
 	File   string `short:"f" help:"Environment file to read from" default:"default"`
 	Format string `help:"Output format" enum:"value,json" default:"value"`
 }
 
+// Run executes the get command, retrieving and displaying a specific variable.
 func (c *GetCmd) Run(globals *Globals) error {
 	session, err := globals.Session()
 	if err != nil {
@@ -32,6 +34,7 @@ func (c *GetCmd) Run(globals *Globals) error {
 			Str("variable", c.Name).
 			Str("file", c.File).
 			Msg("failed to load variables")
+
 		return err
 	}
 	defer cleanup()
@@ -42,6 +45,7 @@ func (c *GetCmd) Run(globals *Globals) error {
 			Str("variable", c.Name).
 			Str("file", c.File).
 			Msg("variable not found")
+
 		return fmt.Errorf("variable %s not found", c.Name)
 	}
 
@@ -60,5 +64,6 @@ func (c *GetCmd) Run(globals *Globals) error {
 	case "json":
 		return json.NewEncoder(os.Stdout).Encode(map[string]string{c.Name: string(result)})
 	}
+
 	return nil
 }
