@@ -3,6 +3,8 @@ package commands
 import (
 	"fmt"
 	"os"
+
+	"github.com/thunderbottom/kiln/internal/core"
 )
 
 type InfoCmd struct {
@@ -11,39 +13,56 @@ type InfoCmd struct {
 }
 
 func (c *InfoCmd) Run(globals *Globals) error {
-	cmd := NewCommand(globals)
-	cfg := cmd.Config()
+	session, err := globals.Session()
+	if err != nil {
+		return fmt.Errorf("initialize session: %w", err)
+	}
 
-	cmd.Logger().Info().
-		Str("config", globals.Config).
+	cfg := session.Config()
+
+	globals.Logger.Info().
+		Str("config_path", globals.Config).
 		Int("recipients", len(cfg.Recipients)).
 		Msg("kiln project info")
 
 	var filesToCheck []string
 	if c.File != "" {
 		filesToCheck = []string{c.File}
+		globals.Logger.Debug().
+			Str("file", c.File).
+			Msg("checking specific file")
 	} else {
 		for name := range cfg.Files {
 			filesToCheck = append(filesToCheck, name)
 		}
+		globals.Logger.Debug().
+			Int("file_count", len(filesToCheck)).
+			Msg("checking all configured files")
 	}
 
 	successful := 0
 	failed := 0
 
 	for _, fileName := range filesToCheck {
-		if err := c.showFileInfo(cmd, fileName); err != nil {
-			cmd.Logger().Error().Err(err).Str("file", fileName).Msg("failed to get file info")
+		globals.Logger.Debug().
+			Str("file", fileName).
+			Bool("verify", c.Verify).
+			Msg("processing file info")
+
+		if err := c.showFileInfo(session, globals, fileName); err != nil {
+			globals.Logger.Error().
+				Err(err).
+				Str("file", fileName).
+				Msg("failed to get file info")
 			failed++
 		} else {
 			successful++
 		}
 	}
 
-	// Show summary if checking multiple files
 	if len(filesToCheck) > 1 {
-		cmd.Logger().Info().
-			Int("success", successful).
+		globals.Logger.Info().
+			Int("successful", successful).
 			Int("failed", failed).
 			Int("total", len(filesToCheck)).
 			Bool("verified", c.Verify).
@@ -57,29 +76,37 @@ func (c *InfoCmd) Run(globals *Globals) error {
 	return nil
 }
 
-func (c *InfoCmd) showFileInfo(cmd Command, fileName string) error {
-	// Get file metadata
-	filePath, info, err := cmd.Session().GetFileInfo(fileName)
+func (c *InfoCmd) showFileInfo(session *core.Session, globals *Globals, fileName string) error {
+	filePath, fileInfo, err := session.GetFileInfo(fileName)
 	if os.IsNotExist(err) {
-		cmd.Logger().Warn().
+		globals.Logger.Warn().
 			Str("file", fileName).
+			Str("path", filePath).
 			Msg("file not found")
 		return nil
 	} else if err != nil {
+		globals.Logger.Error().
+			Err(err).
+			Str("file", fileName).
+			Msg("failed to get file info")
 		return err
 	}
 
-	// Show basic file metadata
-	modified := info.ModTime().Format("2006-01-02 15:04:05")
-	logger := cmd.Logger().Info().
+	modifiedTime := fileInfo.ModTime().Format("2006-01-02 15:04:05")
+	fileSizeKB := float64(fileInfo.Size()) / 1024.0
+
+	logger := globals.Logger.Info().
 		Str("file", fileName).
 		Str("path", filePath).
-		Str("modified", modified).
-		Str("size", fmt.Sprintf("%.2fKB", float64(info.Size())/1024.0))
+		Str("modified", modifiedTime).
+		Str("size", fmt.Sprintf("%.2fKB", fileSizeKB))
 
-	// Verify decryption if requested
 	if c.Verify {
-		if err := cmd.Session().CheckFile(fileName); err != nil {
+		globals.Logger.Debug().
+			Str("file", fileName).
+			Msg("verifying file decryption capability")
+
+		if err := session.CheckFile(fileName); err != nil {
 			logger.Str("status", "failed").
 				Err(err).
 				Msg("file info with verification")

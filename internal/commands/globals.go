@@ -9,7 +9,7 @@ import (
 	"github.com/thunderbottom/kiln/internal/core"
 )
 
-// Globals contains global configuration shared across all commands
+// Globals contains shared configuration and logger for all commands
 type Globals struct {
 	Config  string
 	Key     string
@@ -17,7 +17,7 @@ type Globals struct {
 	session *core.Session
 }
 
-// NewGlobals creates a new Globals instance with proper logger setup
+// NewGlobals creates a new Globals instance with configured logger
 func NewGlobals(config, key string, verbose bool) (*Globals, error) {
 	logLevel := zerolog.InfoLevel
 	if verbose {
@@ -42,19 +42,15 @@ func NewGlobals(config, key string, verbose bool) (*Globals, error) {
 	}, nil
 }
 
-// Session returns a cached session, creating it if needed
-func (g *Globals) Session() *core.Session {
+// Session returns a session, creating it on first access
+func (g *Globals) Session() (*core.Session, error) {
 	if g.session != nil {
-		return g.session
+		return g.session, nil
 	}
 
 	var err error
 	g.session, err = core.NewSession(g.Config, g.Key)
-	if err != nil {
-		g.Logger.Fatal().Err(err).Msg("failed to create session")
-	}
-
-	return g.session
+	return g.session, err
 }
 
 // Context returns a context with the logger attached

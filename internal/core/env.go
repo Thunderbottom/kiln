@@ -9,7 +9,6 @@ func ParseEnv(data []byte) (map[string][]byte, error) {
 		return nil, err
 	}
 
-	// Convert to []byte values for secure handling
 	vars := make(map[string][]byte)
 	for key, value := range stringVars {
 		vars[key] = []byte(value)

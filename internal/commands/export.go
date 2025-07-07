@@ -17,34 +17,58 @@ type ExportCmd struct {
 }
 
 func (c *ExportCmd) Run(globals *Globals) error {
-	cmd := NewCommand(globals)
-
-	envVars, cleanup, err := cmd.Session().ExportVars(c.File, c.Expand)
+	session, err := globals.Session()
 	if err != nil {
+		return fmt.Errorf("initialize session: %w", err)
+	}
+
+	globals.Logger.Debug().
+		Str("file", c.File).
+		Str("format", c.Format).
+		Bool("expand", c.Expand).
+		Msg("exporting environment variables")
+
+	variables, cleanup, err := session.ExportVars(c.File, c.Expand)
+	if err != nil {
+		globals.Logger.Error().
+			Err(err).
+			Str("file", c.File).
+			Msg("failed to export variables")
 		return err
 	}
 	defer cleanup()
 
-	stringVars := make(map[string]string)
-	for key, value := range envVars {
-		stringVars[key] = string(value)
+	globals.Logger.Debug().
+		Int("count", len(variables)).
+		Str("format", c.Format).
+		Msg("variables loaded successfully")
+
+	stringVariables := make(map[string]string)
+	for key, value := range variables {
+		stringVariables[key] = string(value)
 	}
 
 	switch c.Format {
 	case "shell":
-		keys := core.SortedKeys(envVars)
+		keys := core.SortedKeys(variables)
 		for _, key := range keys {
-			value := stringVars[key]
+			value := stringVariables[key]
 			fmt.Printf("export %s='%s'\n", key, strings.ReplaceAll(value, "'", "'\"'\"'"))
 		}
 	case "json":
 		encoder := json.NewEncoder(os.Stdout)
 		encoder.SetIndent("", "  ")
-		return encoder.Encode(stringVars)
+		return encoder.Encode(stringVariables)
 	case "yaml":
 		encoder := yaml.NewEncoder(os.Stdout)
 		defer func() { _ = encoder.Close() }()
-		return encoder.Encode(stringVars)
+		return encoder.Encode(stringVariables)
 	}
+
+	globals.Logger.Debug().
+		Int("exported", len(variables)).
+		Str("format", c.Format).
+		Msg("export completed successfully")
+
 	return nil
 }

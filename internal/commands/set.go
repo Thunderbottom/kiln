@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"syscall"
 
+	"github.com/thunderbottom/kiln/internal/core"
 	"golang.org/x/term"
 )
 
@@ -14,31 +15,49 @@ type SetCmd struct {
 }
 
 func (c *SetCmd) Run(globals *Globals) error {
-	cmd := NewCommand(globals)
+	session, err := globals.Session()
+	if err != nil {
+		return fmt.Errorf("initialize session: %w", err)
+	}
+
+	globals.Logger.Debug().
+		Str("variable", c.Name).
+		Str("file", c.File).
+		Bool("prompt", c.Value == "").
+		Msg("setting environment variable")
 
 	var value []byte
-	var err error
-
 	if c.Value != "" {
 		value = []byte(c.Value)
+		globals.Logger.Debug().
+			Str("variable", c.Name).
+			Msg("using provided value")
 	} else {
 		value, err = c.readValueFromStdin()
 		if err != nil {
+			globals.Logger.Error().
+				Err(err).
+				Str("variable", c.Name).
+				Msg("failed to read value from stdin")
 			return fmt.Errorf("read value from stdin: %w", err)
 		}
+		globals.Logger.Debug().
+			Str("variable", c.Name).
+			Msg("value read from stdin")
 	}
-	defer func() {
-		for i := range value {
-			value[i] = 0
-		}
-	}()
+	defer core.WipeData(value)
 
-	if err := cmd.Session().SetVar(c.File, c.Name, value); err != nil {
+	if err := session.SetVar(c.File, c.Name, value); err != nil {
+		globals.Logger.Error().
+			Err(err).
+			Str("variable", c.Name).
+			Str("file", c.File).
+			Msg("failed to set variable")
 		return err
 	}
 
-	cmd.Logger().Info().
-		Str("key", c.Name).
+	globals.Logger.Info().
+		Str("variable", c.Name).
 		Str("file", c.File).
 		Msg("environment variable set successfully")
 
@@ -52,6 +71,5 @@ func (c *SetCmd) readValueFromStdin() ([]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read password: %w", err)
 	}
-
 	return value, nil
 }

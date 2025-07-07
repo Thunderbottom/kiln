@@ -17,13 +17,11 @@ type AgeManager struct {
 
 // NewAgeManager creates manager with public keys and private key
 func NewAgeManager(publicKeys []string, privateKey []byte) (*AgeManager, error) {
-	// Validate and parse recipients
 	recipients, err := parseRecipients(publicKeys)
 	if err != nil {
 		return nil, err
 	}
 
-	// Parse identity
 	identity, err := age.ParseX25519Identity(string(privateKey))
 	if err != nil {
 		return nil, fmt.Errorf("invalid private key: %w", err)
@@ -85,7 +83,6 @@ func (am *AgeManager) Decrypt(data []byte) ([]byte, error) {
 	return result, nil
 }
 
-// parseRecipients parses public keys into age recipients
 func parseRecipients(publicKeys []string) ([]age.Recipient, error) {
 	if len(publicKeys) == 0 {
 		return nil, fmt.Errorf("no public keys provided")
