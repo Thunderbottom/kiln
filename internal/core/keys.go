@@ -29,22 +29,38 @@ func LoadPrivateKey(keyPath string) ([]byte, error) {
 
 	data, err := ReadFile(keyPath)
 	if err != nil {
-		return nil, fmt.Errorf("read private key file %s: %w", keyPath, err)
+		return nil, fmt.Errorf("read private key: %w", err)
 	}
 	defer WipeData(data)
 
-	key := strings.TrimSpace(string(data))
-	if key == "" {
-		return nil, fmt.Errorf("private key file %s is empty", keyPath)
+	trimmed := bytes.TrimSpace(data)
+	if len(trimmed) == 0 {
+		return nil, fmt.Errorf("private key file is empty")
 	}
 
-	// Check if it's passphrase-protected
-	if strings.Contains(key, "age-encryption.org/v1") {
-		fmt.Printf("Private key at %s is passphrase-protected.\n", keyPath)
-		return decryptPrivateKey(key)
+	// Check if it's passphrase-protected by looking for age encryption header
+	if bytes.Contains(trimmed, []byte("age-encryption.org/v1")) {
+		fmt.Println("Private key is passphrase-protected")
+
+		// Decrypt the private key
+		decryptedKey, err := decryptPrivateKey(string(trimmed))
+		if err != nil {
+			return nil, fmt.Errorf("decrypt private key: %w", err)
+		}
+		defer WipeData(decryptedKey)
+
+		// Return copy of decrypted key
+		result := make([]byte, len(decryptedKey))
+		copy(result, decryptedKey)
+		return result, nil
 	}
 
-	return []byte(key), nil
+	// Make a copy for returning
+	// NOTE: needs to be cleaned up manually
+	result := make([]byte, len(trimmed))
+	copy(result, trimmed)
+
+	return result, nil
 }
 
 // LoadPublicKey loads a public key from either a string or file path
@@ -56,7 +72,7 @@ func LoadPublicKey(input string) (string, error) {
 
 	// Try as file path
 	if !FileExists(input) {
-		return "", fmt.Errorf("input %s is neither a valid public key nor a readable file", input)
+		return "", fmt.Errorf("file is neither a valid public key nor a readable file")
 	}
 
 	data, err := ReadFile(input)
@@ -76,31 +92,31 @@ func LoadPublicKey(input string) (string, error) {
 	if IsPrivateKey(content) {
 		identity, err := age.ParseX25519Identity(content)
 		if err != nil {
-			return "", fmt.Errorf("invalid private key format in %s: %w", input, err)
+			return "", fmt.Errorf("invalid private key format: %w", err)
 		}
 		return identity.Recipient().String(), nil
 	}
 
 	// Could be a passphrase-encrypted identity file
 	if strings.Contains(content, "age-encryption.org/v1") {
-		fmt.Printf("Private key at %s is passphrase-protected.\n", input)
+		fmt.Println("Private key is passphrase-protected")
 
 		// Decrypt the private key
 		decryptedKey, err := decryptPrivateKey(content)
 		if err != nil {
-			return "", fmt.Errorf("decrypt private key from %s: %w", input, err)
+			return "", fmt.Errorf("decrypt private key: %w", err)
 		}
 		defer WipeData(decryptedKey)
 
 		// Extract public key from decrypted private key
 		identity, err := age.ParseX25519Identity(string(decryptedKey))
 		if err != nil {
-			return "", fmt.Errorf("invalid decrypted private key format in %s: %w", input, err)
+			return "", fmt.Errorf("invalid decrypted private key format: %w", err)
 		}
 		return identity.Recipient().String(), nil
 	}
 
-	return "", fmt.Errorf("file %s does not contain a valid age key", input)
+	return "", fmt.Errorf("file does not contain a valid age key")
 }
 
 // GenerateKeyPair generates a new age key pair

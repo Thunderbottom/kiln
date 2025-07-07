@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"os/signal"
 	"strings"
 	"syscall"
 	"time"
@@ -54,7 +55,9 @@ func (c *RunCmd) Run(globals *Globals) error {
 }
 
 func (c *RunCmd) executeCommand(envVars map[string][]byte, command Command) error {
-	ctx := context.Background()
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
 	if c.Timeout != "" {
 		duration, err := time.ParseDuration(c.Timeout)
 		if err != nil {

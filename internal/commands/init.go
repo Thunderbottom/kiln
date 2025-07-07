@@ -34,7 +34,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 
 	// Check if key already exists
 	if core.FileExists(keyPath) && !c.Force {
-		return fmt.Errorf("private key already exists at %s. Overwriting will make existing encrypted files unreadable. Use --force to overwrite (NOT RECOMMENDED)", keyPath)
+		return fmt.Errorf("private key already exists. Overwriting will make existing encrypted files unreadable. Use --force to overwrite (NOT RECOMMENDED)")
 	}
 
 	// Generate key pair
@@ -77,7 +77,7 @@ func (c *InitKeyCmd) Run(globals *Globals) error {
 func (c *InitConfigCmd) Run(globals *Globals) error {
 	// Check if config already exists
 	if config.Exists(c.Path) && !c.Force {
-		return fmt.Errorf("configuration already exists at %s. Use --force to overwrite", c.Path)
+		return fmt.Errorf("configuration already exists. Use --force to overwrite")
 	}
 
 	// Load all public keys using consolidated function

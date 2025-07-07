@@ -69,7 +69,7 @@ func (s *Session) LoadVars(fileName string) (map[string][]byte, func(), error) {
 	defer WipeData(plaintext)
 
 	// Parse environment file directly to []byte values
-	vars, err := ParseEnvData(plaintext)
+	vars, err := ParseEnv(plaintext)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -91,8 +91,7 @@ func (s *Session) SaveVars(fileName string, vars map[string][]byte) error {
 		return err
 	}
 
-	// Format content directly from []byte values
-	content := FormatEnvData(vars)
+	content := FormatEnv(vars)
 
 	// Encrypt using session's crypto manager
 	encrypted, err := s.crypto.Encrypt(content)

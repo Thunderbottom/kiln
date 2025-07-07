@@ -63,7 +63,6 @@ func (c *InfoCmd) showFileInfo(cmd Command, fileName string) error {
 	if os.IsNotExist(err) {
 		cmd.Logger().Warn().
 			Str("file", fileName).
-			Str("path", filePath).
 			Msg("file not found")
 		return nil
 	} else if err != nil {

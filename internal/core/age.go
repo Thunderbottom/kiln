@@ -124,14 +124,6 @@ func ValidatePublicKey(key string) error {
 		return fmt.Errorf("empty public key")
 	}
 
-	if !strings.HasPrefix(key, "age1") {
-		return fmt.Errorf("public key must start with 'age1'")
-	}
-
-	if len(key) != 62 { // age1 + 58 characters
-		return fmt.Errorf("invalid public key length")
-	}
-
 	_, err := age.ParseX25519Recipient(key)
 	if err != nil {
 		return fmt.Errorf("invalid public key format: %w", err)
