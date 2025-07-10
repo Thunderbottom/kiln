@@ -6,7 +6,7 @@
 
 <div align="center">
 
-[![kiln Documentation](https://img.shields.io/badge/kiln-documentation-blue)](https://null.pointe.rs/kiln)
+[![kiln Documentation](https://img.shields.io/badge/kiln-documentation-blue)](https://kiln.sh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Latest Release](https://img.shields.io/github/v/release/thunderbottom/kiln)](https://github.com/thunderbottom/kiln/releases)
 
@@ -158,6 +158,8 @@ production = { filename = "prod.env", access = ["admins"] }
 shared = { filename = "shared.env", access = ["alice", "contractors"] }
 ```
 
+See the [Configuration Guide](https://kiln.sh/configuration/configuration-file)
+
 ### Environment Variables
 
 - `KILN_PRIVATE_KEY_FILE`: Path to private key file
@@ -225,7 +227,8 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Support
 
-- **Documentation**: [Full documentation](https://thunderbottom.github.io/kiln/)
+- **Documentation**: [Full documentation](https://kiln.sh)
+- **FAQ**: [Frequently Asked Questions](https://kiln.sh/faq/)
 - **Issues**: [GitHub Issues](https://github.com/thunderbottom/kiln/issues)
 - **Discussions**: [GitHub Discussions](https://github.com/thunderbottom/kiln/discussions)
 

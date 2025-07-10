@@ -1,0 +1,129 @@
+---
+title: Installation
+description: Install kiln on your system using pre-built binaries or compile from source.
+---
+
+import { Tabs, TabItem, LinkCard, LinkButton } from '@astrojs/starlight/components';
+
+kiln is distributed as a single binary with no external dependencies. Choose your preferred installation method below.
+
+## Binary Releases
+
+Download pre-built binaries for your platform from the [releases page](https://github.com/thunderbottom/kiln/releases).
+
+<Tabs>
+<TabItem label="Linux">
+
+```bash
+# Download the latest release
+curl -L https://github.com/thunderbottom/kiln/releases/latest/download/kiln-linux-amd64 -o kiln
+
+# Make it executable and install
+chmod +x kiln
+sudo mv kiln /usr/local/bin/
+
+# Verify installation
+kiln --version
+```
+
+For ARM64 systems, use `kiln-linux-arm64`.
+
+</TabItem>
+<TabItem label="macOS">
+
+```bash
+# Intel Macs
+curl -L https://github.com/thunderbottom/kiln/releases/latest/download/kiln-darwin-amd64 -o kiln
+
+# Apple Silicon Macs (M1/M2)
+curl -L https://github.com/thunderbottom/kiln/releases/latest/download/kiln-darwin-arm64 -o kiln
+
+# Make it executable and install
+chmod +x kiln
+sudo mv kiln /usr/local/bin/
+
+# Verify installation
+kiln --version
+```
+
+</TabItem>
+<TabItem label="Windows">
+
+1. Download `kiln-windows-amd64.exe` from the [releases page](https://github.com/thunderbottom/kiln/releases/latest)
+2. Rename it to `kiln.exe`
+3. Place it in a directory that's in your PATH
+4. Open a new command prompt and run `kiln --version`
+
+</TabItem>
+</Tabs>
+
+## Install from Source
+
+If you have Go 1.23 or later installed:
+
+```bash
+go install github.com/thunderbottom/kiln@latest
+```
+
+This installs the latest release to your `$GOPATH/bin` directory.
+
+## Package Managers
+
+Package manager support:
+
+<Tabs>
+<TabItem label="Nix">
+
+```shell
+nix run github:thunderbottom/kiln
+```
+</TabItem>
+<TabItem label="Arch (Coming Soon)">
+
+```shell
+yay -S kiln
+```
+</TabItem>
+<TabItem label="Homebrew (Coming Soon)">
+
+```shell
+brew install thunderbottom/tap/kiln
+```
+</TabItem>
+</Tabs>
+
+## Development Build
+
+To build from the development branch:
+
+```bash
+git clone https://github.com/thunderbottom/kiln.git
+cd kiln
+go mod download
+make build
+
+# Binary will be available at ./bin/kiln
+```
+
+## Verification
+
+After installation, verify kiln is working:
+
+```bash
+# Check version
+kiln --version
+
+# View help
+kiln --help
+
+# Test key generation
+kiln init key --help
+```
+---
+
+## Next Steps
+
+Ready to get started? Initialize your first kiln project:
+
+<LinkButton href="/quick-start/" variant="primary">Quick Start Guide</LinkButton>
+<LinkButton href="/basic-concepts/" variant="secondary">Learn Core Concepts</LinkButton>

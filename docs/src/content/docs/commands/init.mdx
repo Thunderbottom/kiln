@@ -1,0 +1,202 @@
+---
+title: init
+---
+
+import { Aside, LinkButton } from '@astrojs/starlight/components';
+
+Initialize new kiln projects with encryption keys and configuration files.
+
+## Synopsis
+
+```bash
+kiln init key [options]
+kiln init config [options]
+```
+
+The `init` command provides two subcommands for setting up kiln projects:
+
+- `key` - Generate age encryption key pairs
+- `config` - Create configuration files with recipients and access control
+
+## Subcommands
+
+### `init key`
+
+Generate a new age encryption key pair for secure environment variable management.
+
+```bash
+kiln init key [--path <path>] [--encrypt] [--force]
+```
+
+#### Options
+
+- `--path <path>`: Key file location (default: `~/.kiln/kiln.key`)
+- `--encrypt`: Protect private key with passphrase
+- `--force`: Overwrite existing key files
+
+<Aside type="tip">
+It is recommended to always generate a new key file with `--encrypt`, unless the key is to be used in automated environments.
+</Aside>
+
+#### Examples
+
+Generate a new key pair:
+```bash
+kiln init key
+```
+
+Generate with custom path:
+```bash
+kiln init key --path ./keys/production.key
+```
+
+Generate with passphrase protection:
+```bash
+kiln init key --encrypt
+```
+
+#### Output
+
+The command creates two files:
+- Private key: `<path>` (mode 0600)
+- Public key: `<path>.pub` (mode 0600)
+
+The public key is displayed and should be shared with team members who need to add you as a recipient.
+
+<Aside type="caution">
+Private keys are generated using cryptographically secure random number generation and should be protected with appropriate file permissions. While kiln ensures proper permissions on directories and the key files, it is left up to the user to maintain it.
+</Aside>
+
+### `init config`
+
+Create a new kiln configuration file with recipients and file definitions.
+
+```bash
+kiln init config [--path <path>] [--recipients name=key] [--force]
+```
+
+#### Options
+
+- `--path <path>`: Configuration file location (default: `kiln.toml`)
+- `--recipients name=key`: Named recipients in `name=public-key` format
+- `--force`: Overwrite existing configuration
+
+#### Examples
+
+Create configuration with recipients:
+```bash
+kiln init config --recipients "alice=age1234...abcd" --recipients "bob=ssh-ed25519 AAAAC3..."
+```
+
+Create with custom path:
+```bash
+kiln init config --path ./deploy/kiln.toml
+```
+
+#### Recipients Format
+
+Recipients can be specified in two formats:
+
+**Age public keys:**
+```bash
+--recipients "alice=age1234567890abcdef..."
+```
+
+**SSH public keys:**
+```bash
+--recipients "bob=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGb..."
+```
+
+**From file:**
+```bash
+--recipients "charlie=~/.ssh/id_ed25519.pub"
+```
+
+#### Generated Configuration
+
+The command creates a `kiln.toml` file with:
+
+```toml
+[recipients]
+alice = "age1234567890abcdef..."
+bob = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGb..."
+
+[files]
+[files.default]
+filename = ".kiln.env"
+access = ["*"]
+```
+
+Configuration files contain only public keys and can be safely committed to version control.
+
+## Common Workflows
+
+### Individual Setup
+
+```bash
+# Generate personal key
+kiln init key
+
+# Create configuration with your public key
+kiln init config --recipients "$(whoami)=$(cat ~/.kiln/kiln.key.pub)"
+```
+
+### Team Setup
+
+```bash
+# Team lead generates shared configuration
+kiln init config \
+  --recipients "alice=age1234...abcd" \
+  --recipients "bob=ssh-ed25519 AAAAC3..." \
+  --recipients "charlie=~/.ssh/id_ed25519.pub"
+```
+
+### Production Setup
+
+```bash
+# Generate production key with passphrase
+kiln init key --path ./keys/prod.key --encrypt
+
+# Create restricted configuration
+kiln init config --path ./prod-kiln.toml \
+  --recipients "admin=$(cat ./keys/prod.key.pub)"
+```
+
+## Error Handling
+
+The `init` command validates all inputs and provides clear error messages:
+
+- **Key exists**: Use `--force` to overwrite existing keys
+- **Invalid path**: Path must be accessible and writable
+- **Invalid public key**: Public key format must be valid age or SSH key
+- **Permission denied**: Directory must be writable
+
+## Integration
+
+### CI/CD Pipelines
+
+```bash
+# Generate ephemeral keys for CI
+kiln init key --path /tmp/ci.key
+
+# Use existing keys in configuration
+kiln init config --recipients "ci=$(cat /tmp/ci.key.pub)"
+```
+
+### Team Onboarding
+
+```bash
+# New team member shares their public key
+kiln init config --recipients "newmember=age1new...member"
+
+# Or use their SSH key
+kiln init config --recipients "newmember=$(curl -s https://github.com/username.keys)"
+```
+
+## Best Practices
+
+1. **Use descriptive recipient names** that match team member identities
+2. **Store private keys securely** with appropriate file permissions
+3. **Use passphrase encryption** for production and shared environments
+4. **Version control configuration files** but never private keys
+5. **Document key locations** and backup procedures for your team

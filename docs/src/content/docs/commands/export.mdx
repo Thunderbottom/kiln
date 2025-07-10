@@ -1,0 +1,331 @@
+---
+title: export
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Output environment variables in various formats for integration with external tools.
+
+## Synopsis
+
+```bash
+kiln export [options]
+```
+
+The `export` command decrypts and outputs all environment variables from a file in formats suitable for shell sourcing, JSON processing, or YAML configuration.
+
+## Options
+
+- `--file`, `-f`: Environment file to export (default: `default`)
+- `--format`: Output format: `shell`, `json`, or `yaml` (default: `shell`)
+
+## Examples
+
+### Shell Format (Default)
+```bash
+kiln export
+# export DATABASE_URL='postgresql://localhost:5432/myapp'
+# export API_KEY='sk-1234567890abcdef'
+# export DEBUG_MODE='true'
+```
+
+### JSON Format
+```bash
+kiln export --format json
+# {
+#   "DATABASE_URL": "postgresql://localhost:5432/myapp",
+#   "API_KEY": "sk-1234567890abcdef",
+#   "DEBUG_MODE": "true"
+# }
+```
+
+### YAML Format
+```bash
+kiln export --format yaml
+# DATABASE_URL: postgresql://localhost:5432/myapp
+# API_KEY: sk-1234567890abcdef
+# DEBUG_MODE: "true"
+```
+
+### Specific Environment File
+```bash
+kiln export --file production --format json
+kiln export --file staging --format shell
+```
+
+## Output Formats
+
+### Shell Format
+Generates `export` statements suitable for shell sourcing:
+```bash
+export DATABASE_URL='postgresql://localhost:5432/myapp'
+export API_KEY='sk-1234567890abcdef'
+export PORT='8080'
+```
+
+**Features:**
+- Values are properly shell-escaped with single quotes
+- Special characters are handled automatically
+- Variables are sorted alphabetically
+- Direct sourcing: `eval "$(kiln export)"`
+
+### JSON Format
+Outputs a JSON object with all variables:
+```json
+{
+  "DATABASE_URL": "postgresql://localhost:5432/myapp",
+  "API_KEY": "sk-1234567890abcdef",
+  "PORT": "8080"
+}
+```
+
+**Features:**
+- Pretty-printed with 2-space indentation
+- Proper JSON escaping for special characters
+- Compatible with `jq` and other JSON tools
+- Machine-readable format
+
+### YAML Format
+Outputs variables as YAML key-value pairs:
+```yaml
+DATABASE_URL: postgresql://localhost:5432/myapp
+API_KEY: sk-1234567890abcdef
+PORT: "8080"
+```
+
+**Features:**
+- Clean, human-readable format
+- Automatic type inference
+- Compatible with YAML parsers
+- Suitable for configuration files
+
+## Security Features
+
+<Aside type="caution">
+Variables are wiped from memory after output and export respects file-level permissions. Be careful when redirecting output to avoid exposing secrets in insecure locations.
+</Aside>
+
+### Memory Safety
+- Variables are wiped from memory after output
+- No sensitive data persists after command completion
+- Secure cleanup on interruption
+
+### Access Control
+Export respects file-level permissions:
+```toml
+[files.production]
+filename = "prod.env"
+access = ["admin", "deploy"]
+
+[files.development]
+filename = "dev.env"
+access = ["*"]
+```
+
+## Integration Patterns
+
+### Shell Environment Loading
+```bash
+# Load variables into current shell
+eval "$(kiln export --file production)"
+
+# Or save to file for later sourcing
+kiln export --file production > /tmp/prod.env
+source /tmp/prod.env
+```
+
+### Docker Integration
+```bash
+# Generate Docker environment file
+kiln export --file production --format shell > docker.env
+docker run --env-file docker.env myapp:latest
+
+# Or use JSON for docker-compose
+kiln export --file production --format json > compose.env.json
+```
+
+### CI/CD Pipelines
+```bash
+# GitHub Actions
+kiln export --format json | jq -r 'to_entries[] | "\(.key)=\(.value)"' >> $GITHUB_ENV
+
+# GitLab CI
+kiln export --format shell > variables.env
+```
+
+### Configuration Management
+```bash
+# Generate Kubernetes ConfigMap
+kiln export --format yaml > configmap-data.yaml
+
+# Ansible variables
+kiln export --format json > ansible-vars.json
+```
+
+## Workflow Examples
+
+### Development Setup
+```bash
+# Export development environment
+kiln export --file dev > .env.local
+echo ".env.local" >> .gitignore
+
+# Load into current session
+eval "$(kiln export --file dev)"
+npm start
+```
+
+### Production Deployment
+```bash
+# Export for deployment script
+kiln export --file production --format json > deploy-config.json
+
+# Validate required variables
+required_vars=("DATABASE_URL" "API_KEY" "JWT_SECRET")
+export_json=$(kiln export --file production --format json)
+for var in "${required_vars[@]}"; do
+  if ! echo "$export_json" | jq -e "has(\"$var\")" > /dev/null; then
+    echo "Missing required variable: $var"
+    exit 1
+  fi
+done
+```
+
+### Configuration Backup
+```bash
+# Backup all environments
+for env in dev staging production; do
+  kiln export --file "$env" --format json > "backup-$env.json"
+done
+
+# Create restore script
+for env in dev staging production; do
+  echo "# Restore $env environment"
+  jq -r 'to_entries[] | "kiln set \(.key) \"\(.value)\" --file '$env'"' "backup-$env.json"
+done > restore.sh
+```
+
+### Cross-Platform Configuration
+```bash
+# Windows batch file
+kiln export --format shell | sed 's/export /set /' > vars.bat
+
+# PowerShell
+kiln export --format json | jq -r 'to_entries[] | "$env:\(.key)=\"\(.value)\""' > vars.ps1
+```
+
+## Error Handling
+
+### Access Denied
+```bash
+kiln export --file production
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+```
+
+### File Not Found
+```bash
+kiln export --file nonexistent
+# Error: configuration error: file 'nonexistent' not configured (check kiln.toml file definitions)
+```
+
+### Empty Environment
+```bash
+kiln export --file empty
+# (No output - empty environment file produces no variables)
+```
+
+## Performance Considerations
+
+### Large Environment Files
+- Export time scales with number of variables
+- Memory usage proportional to total content size
+- Output generation time varies by format (JSON > YAML > shell)
+
+### Format-Specific Performance (for very large files)
+- **Shell**: Fastest, minimal processing
+- **JSON**: Moderate, requires JSON encoding
+- **YAML**: Slowest, complex formatting rules
+
+## Best Practices
+
+### Security
+1. **Redirect output carefully** to avoid exposing secrets
+2. **Use temporary files** with proper permissions for sensitive exports
+3. **Clean up exported files** containing production secrets
+4. **Audit export operations** in production environments
+
+### Integration
+1. **Validate exports** before using in deployment scripts
+2. **Handle empty environments** gracefully in automation
+3. **Use appropriate formats** for target systems
+4. **Version control export scripts** but not exported secrets
+
+### Automation
+```bash
+# Robust export with error handling
+export_vars() {
+  local env_file="$1"
+  local format="${2:-shell}"
+  
+  if ! kiln export --file "$env_file" --format "$format" 2>/dev/null; then
+    echo "Failed to export $env_file environment" >&2
+    return 1
+  fi
+}
+
+# Usage in deployment script
+if vars=$(export_vars production json); then
+  echo "Successfully exported production variables"
+  # Process $vars
+else
+  echo "Export failed, aborting deployment"
+  exit 1
+fi
+```
+
+## Comparison with Alternatives
+
+### vs. `get` command
+- `export`: All variables, various formats
+- `get`: Single variable, immediate use
+
+### vs. `run` command
+- `export`: Generates output for external use
+- `run`: Direct command execution with environment
+
+### vs. `edit` command
+- `export`: Read-only output generation
+- `edit`: Interactive modification interface
+
+## Advanced Usage
+
+### Custom Formatting
+```bash
+# Custom shell format with prefixes
+kiln export --format json | jq -r 'to_entries[] | "export MYAPP_\(.key)=\(.value)"'
+
+# Environment-specific prefixes
+env_name="production"
+kiln export --file "$env_name" --format json | \
+  jq -r --arg env "$env_name" 'to_entries[] | "export \($env | ascii_upcase)_\(.key)=\(.value)"'
+```
+
+### Filtered Exports
+```bash
+# Export only specific variables
+kiln export --format json | jq 'with_entries(select(.key | startswith("API_")))'
+
+# Export secrets only
+kiln export --format json | jq 'with_entries(select(.key | contains("SECRET") or contains("KEY")))'
+```
+
+### Template Integration
+```bash
+# Mustache templates
+kiln export --format json > config.json
+mustache config.json template.conf > final.conf
+
+# envsubst
+eval "$(kiln export)"
+envsubst < template.conf > final.conf
+```

@@ -1,0 +1,266 @@
+---
+title: get
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Retrieve specific environment variables from encrypted files.
+
+## Synopsis
+
+```bash
+kiln get <name> [options]
+```
+
+The `get` command decrypts and retrieves individual environment variables with secure memory handling and flexible output formatting.
+
+## Arguments
+
+- `<name>`: Environment variable name (required)
+
+## Options
+
+- `--file`, `-f`: Environment file to read from (default: `default`)
+- `--format`: Output format: `value` or `json` (default: `value`)
+
+## Examples
+
+### Basic Retrieval
+```bash
+kiln get DATABASE_URL
+# postgresql://localhost:5432/myapp
+```
+
+### Specific Environment File
+```bash
+kiln get API_KEY --file production
+kiln get DEBUG_MODE --file development
+```
+
+### JSON Output
+```bash
+kiln get DATABASE_URL --format json
+# {"DATABASE_URL": "postgresql://localhost:5432/myapp"}
+```
+
+## Output Formats
+
+### Value Format (Default)
+Returns the raw variable value without quotes or formatting:
+```bash
+kiln get PORT
+# 8080
+
+kiln get CONNECTION_STRING
+# host=localhost;user=admin;password=secret
+```
+
+### JSON Format
+Returns a JSON object with the variable name and value:
+```bash
+kiln get API_KEY --format json
+# {"API_KEY": "sk-1234567890abcdef"}
+```
+
+This format is useful for:
+- Processing in scripts with `jq`
+- Importing into other JSON-based tools
+- Preserving variable names in output
+
+## Security Features
+
+<Aside type="note">
+Variable values are wiped from memory after output and access is controlled by file-level permissions defined in your configuration.
+</Aside>
+
+### Memory Safety
+- Variable values are wiped from memory after output
+- No sensitive data persists in process memory
+- Secure cleanup on command completion
+
+### Access Control
+Access is controlled by file-level permissions in `kiln.toml`:
+```toml
+[files.production]
+filename = "prod.env"
+access = ["admin"]  # Only admin can access
+
+[files.development]
+filename = "dev.env"
+access = ["*"]      # All recipients can access
+```
+
+### Validation
+- Variable names must match stored variables exactly (case-sensitive)
+- File access is verified before decryption
+- Input validation prevents directory traversal
+
+## Integration
+
+### Shell Scripts
+```bash
+#!/bin/bash
+DATABASE_URL=$(kiln get DATABASE_URL --file production)
+API_KEY=$(kiln get API_KEY --file production)
+
+# Use in application startup
+./myapp --db="$DATABASE_URL" --api-key="$API_KEY"
+```
+
+### Environment Variable Export
+```bash
+# Export to current shell
+export DATABASE_URL=$(kiln get DATABASE_URL)
+export API_KEY=$(kiln get API_KEY)
+```
+
+### JSON Processing
+```bash
+# Extract value with jq
+PORT=$(kiln get PORT --format json | jq -r '.PORT')
+
+# Combine multiple variables
+{
+  kiln get DATABASE_URL --format json
+  kiln get API_KEY --format json
+  kiln get DEBUG_MODE --format json
+} | jq -s add
+```
+
+## Error Handling
+
+### Variable Not Found
+```bash
+kiln get NONEXISTENT_VAR
+# Error: variable 'NONEXISTENT_VAR' not found in 'default'
+```
+
+### Access Denied
+```bash
+kiln get SECRET_KEY --file production
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+```
+
+### File Not Configured
+```bash
+kiln get VAR --file undefined
+# Error: configuration error: file 'undefined' not configured (check kiln.toml file definitions)
+```
+
+### Invalid Variable Name
+```bash
+kiln get invalid-name
+# Error: invalid variable name: must start with letter or underscore, followed by letters, numbers, or underscores
+```
+
+## Workflow Examples
+
+### Development Setup
+```bash
+# Check current configuration
+kiln get DATABASE_URL --file dev
+kiln get API_ENDPOINT --file dev
+kiln get LOG_LEVEL --file dev
+```
+
+### Production Verification
+```bash
+# Verify production settings
+kiln get DATABASE_URL --file production --format json
+kiln get JWT_SECRET --file production >/dev/null && echo "JWT_SECRET is set"
+```
+
+### Configuration Validation
+```bash
+# Validate required variables exist
+required_vars=("DATABASE_URL" "API_KEY" "JWT_SECRET")
+for var in "${required_vars[@]}"; do
+  if kiln get "$var" --file production >/dev/null 2>&1; then
+    echo "✓ $var is configured"
+  else
+    echo "✗ $var is missing"
+  fi
+done
+```
+
+### Backup Configuration
+```bash
+# Export all variables to backup script
+for var in DATABASE_URL API_KEY JWT_SECRET; do
+  echo "kiln set $var \"$(kiln get $var --file production)\" --file backup"
+done
+```
+
+## Performance Considerations
+
+### File Decryption
+Each `get` command:
+- Decrypts the entire environment file
+- Extracts the requested variable
+- Wipes decrypted data from memory
+
+For multiple variables from the same file, consider using:
+- `export` command for bulk operations
+- `run` command for command execution with full environment
+
+### Memory Usage
+- Memory usage scales with file size, not variable count
+- Large environment files may require more memory during decryption
+- Memory is promptly released after variable extraction
+
+## Best Practices
+
+### Scripting
+```bash
+# Check if variable exists before using
+if DATABASE_URL=$(kiln get DATABASE_URL 2>/dev/null); then
+  echo "Database URL: $DATABASE_URL"
+else
+  echo "Database URL not configured"
+  exit 1
+fi
+```
+
+### Error Handling in Scripts
+```bash
+# Robust error handling
+get_var() {
+  local var_name="$1"
+  local file="${2:-default}"
+  
+  if ! kiln get "$var_name" --file "$file" 2>/dev/null; then
+    echo "Error: Required variable $var_name not found in file $file" >&2
+    return 1
+  fi
+}
+
+DATABASE_URL=$(get_var DATABASE_URL production) || exit 1
+```
+
+### Conditional Configuration
+```bash
+# Use different files based on environment
+ENVIRONMENT=${NODE_ENV:-development}
+API_ENDPOINT=$(kiln get API_ENDPOINT --file "$ENVIRONMENT")
+```
+
+## Security Considerations
+
+1. **Output redirection**: Be careful when redirecting output to files that might be readable by other users
+2. **Command history**: Avoid using `get` output directly in commands that might be logged
+3. **Process environment**: Variables retrieved with `get` are not automatically added to process environment
+4. **Access logging**: Consider that `get` operations may be logged for audit purposes
+
+## Comparison with Alternatives
+
+### vs. `export` command
+- `get`: Single variable, immediate output
+- `export`: Multiple variables, various formats
+
+### vs. `run` command  
+- `get`: Manual variable retrieval for scripts
+- `run`: Automatic environment injection for commands
+
+### vs. `edit` command
+- `get`: Read-only access to variables
+- `edit`: Interactive modification of multiple variables

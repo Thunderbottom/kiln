@@ -1,0 +1,198 @@
+---
+title: Basic Concepts
+description: Understand kiln's core concepts including age encryption, recipients, groups, and access control.
+---
+
+import { Tabs, TabItem, Aside, LinkButton } from '@astrojs/starlight/components';
+
+Understanding kiln's core concepts helps you make the most of its security features and team collaboration capabilities.
+
+## Age Encryption
+
+kiln uses [age encryption](https://age-encryption.org/) as its cryptographic foundation. Age is a modern, simple file encryption tool designed to replace GPG for everyday use.
+
+Age provides strong cryptography with a simple design. It's battle-tested, actively maintained, and designed for exactly this use case - encrypting files with public key cryptography.
+
+### Key Properties
+
+- **Asymmetric encryption** - Each person has a public/private key pair
+- **Multiple recipients** - Files can be encrypted for multiple people simultaneously  
+- **Strong security** - Uses modern cryptographic primitives (X25519, ChaCha20Poly1305)
+- **Simple format** - No configuration complexity or trust networks
+
+## Recipients
+
+Recipients are named individuals who can decrypt specific files. Each recipient has a name, public key (for encryption), and private key (kept secret for decryption).
+
+<Tabs>
+<TabItem label="Age Keys">
+
+Age keys are purpose-built for encryption:
+
+```bash
+# Public key format
+age1abc123def456...
+
+# Private key format  
+AGE-SECRET-KEY-1ABC123DEF456...
+```
+
+Age keys are the recommended choice for new setups.
+
+</TabItem>
+<TabItem label="SSH Keys">
+
+Existing SSH keys work seamlessly:
+
+```bash
+# SSH public key
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5...
+
+# SSH private key (in ~/.ssh/)
+-----BEGIN OPENSSH PRIVATE KEY-----
+```
+
+Perfect for teams already using SSH infrastructure.
+
+</TabItem>
+</Tabs>
+
+<Aside type="note">
+kiln supports both age keys (purpose-built for encryption) and SSH keys (existing infrastructure). For detailed key format specifications, see [File Formats](/reference/formats/).
+</Aside>
+
+## Groups
+
+Groups are collections of recipients that simplify access management. Instead of listing individual users for each file, you can grant access to entire groups.
+
+```toml
+[groups]
+developers = ["alice", "bob", "charlie"]
+admins = ["alice", "david"]
+contractors = ["emma", "frank"]
+```
+
+**Benefits of groups:**
+
+- Easier management - Add someone to a group instead of every file
+- Clear roles - Define organizational roles explicitly
+- Flexible access - People can belong to multiple groups
+- Future-proof - New group members automatically get appropriate access
+
+## Files and Access Control
+
+kiln organizes secrets into separate files, each with its own access control. This enables environment separation and role-based permissions.
+
+### File Structure
+
+**Default file** - `.kiln.env` - Usually accessible to all team members for shared development secrets.
+
+**Environment files** - `staging.env`, `prod.env` - Environment-specific secrets with restricted access.
+
+**Special purpose** - `shared.env`, `client.env` - Custom files for specific use cases or teams.
+
+### Access Control Patterns
+
+<Tabs>
+<TabItem label="Universal Access">
+
+Grant access to all recipients:
+
+```toml
+[files]
+default = { filename = ".kiln.env", access = ["*"] }
+```
+
+</TabItem>
+<TabItem label="Group-Based">
+
+Grant access by group membership:
+
+```toml
+[files]
+staging = { filename = "staging.env", access = ["developers"] }
+production = { filename = "prod.env", access = ["admins"] }
+```
+
+</TabItem>
+<TabItem label="Mixed Access">
+
+Combine individuals and groups:
+
+```toml
+[files]
+special = { 
+  filename = "special.env", 
+  access = ["alice", "contractors", "emergency-user"] 
+}
+```
+
+</TabItem>
+</Tabs>
+
+## Configuration File
+
+The `kiln.toml` file defines your project's security model. It specifies who can access what (recipients and groups), which files exist and their access rules, and how your team is organized.
+
+### Example Configuration
+
+```toml
+# Named recipients with their public keys
+[recipients]
+alice = "age1abc123..."          # Team lead (age key)
+bob = "ssh-ed25519 AAAAC3..."    # Developer (SSH key)
+charlie = "age1def456..."        # Developer (age key)
+david = "age1ghi789..."          # DevOps admin (age key)
+
+# Logical groups for access management
+[groups]
+developers = ["alice", "bob", "charlie"]
+admins = ["alice", "david"]
+
+# Files with granular access control
+[files]
+default = { filename = ".kiln.env", access = ["*"] }
+staging = { filename = "staging.env", access = ["developers"] }
+production = { filename = "prod.env", access = ["admins"] }
+```
+
+<Aside type="tip">
+The configuration file is safe to commit to version control. It contains no secrets - only public keys and access rules.
+</Aside>
+
+## Encryption Model
+
+Understanding how kiln encrypts data helps you make informed security decisions.
+
+### Per-File Encryption
+
+Each file is encrypted independently:
+
+1. **Recipient resolution** - kiln determines who can access the file based on `access` rules
+2. **Key collection** - Public keys for all authorized recipients are gathered  
+3. **Encryption** - The file is encrypted so any authorized recipient can decrypt it
+4. **Storage** - Encrypted data is written to the specified filename
+
+### No Shared Secrets
+
+kiln uses public key cryptography exclusively:
+
+- **No master passwords** - Each person uses their own private key
+- **No key sharing** - Private keys never leave individual machines
+- **Independent access** - Adding/removing people doesn't affect others
+- **Forward security** - Removing someone's access doesn't require re-encrypting for others
+
+### Security Properties
+
+- **Confidentiality** - Only authorized recipients can decrypt files
+- **Integrity** - Files cannot be modified without detection
+- **Authentication** - Each person uses their own cryptographic identity
+- **Non-repudiation** - Actions can be traced to specific individuals
+
+## Next Steps
+
+Now that you understand the core concepts, put them into practice:
+
+<LinkButton href="/quick-start/" variant="primary">Quick Start Tutorial</LinkButton>
+<LinkButton href="/configuration/recipients/" variant="secondary">Configure Your Team</LinkButton>
+<LinkButton href="/workflows/team-setup/" variant="minimal">Team Setup Workflows</LinkButton>

@@ -7,4 +7,118 @@
 @theme {
   --font-sans: 'Hanken Grotesk', sans--serif;
   --font-mono: 'IBM Plex Mono';
+
+  --color-accent-50: var(--color-cyan-50);
+  --color-accent-100: var(--color-cyan-100);
+  --color-accent-200: var(--color-cyan-200);
+  --color-accent-300: var(--color-cyan-300);
+  --color-accent-400: var(--color-cyan-400);
+  --color-accent-500: var(--color-cyan-500);
+  --color-accent-600: var(--color-cyan-600);
+  --color-accent-700: var(--color-cyan-700);
+  --color-accent-800: var(--color-cyan-800);
+  --color-accent-900: var(--color-cyan-900);
+  
+  --cyan-hsl: 190, 100%, 28%;
+	--overlay-byan: hsla(var(--cyan-hsl), 0.4);
+
+	--sl-bg-color-sidebar: 
+}
+
+:root[data-theme='dark'] {
+	.sidebar-pane {
+		background-color: var(--color-gray-900);
+	}
+}
+
+[data-has-hero] .page {
+	background:
+		linear-gradient(215deg, var(--overlay-byan), transparent 40%),
+		radial-gradient(var(--overlay-byan), transparent 30%) no-repeat -60vw -40vh / 105vw 200vh,
+		radial-gradient(var(--overlay-byan), transparent 65%) no-repeat 50% calc(100% + 20rem) /
+			60rem 30rem;
+}
+
+header {
+	border-bottom: 1px solid transparent;
+	background-color: transparent;
+	-webkit-backdrop-filter: blur(16px);
+	backdrop-filter: blur(16px);
+}
+
+.hero {
+  display: flex;
+}
+
+.hero .tagline {
+  max-width: 90%;
+}
+
+.card,
+.sl-card,
+[data-card],
+.starlight-card {
+  @apply rounded-lg shadow-sm;
+}
+
+.card-grid .card {
+  @apply rounded-lg;
+}
+
+.starlight-aside,
+.sl-aside,
+aside[class*="starlight"] {
+  @apply rounded-lg;
+}
+
+.hero-gif {
+  margin: 2rem 0;
+  text-align: center;
+  padding-bottom: 20px;
+}
+
+.hero-gif img {
+  @apply shadow-sm;
+  max-width: 100%;
+  max-height: 60vh;
+  width: auto;
+  height: auto;
+  border-radius: 8px;
+  object-fit: contain;
+}
+
+/* Make it responsive */
+@media (max-width: 768px) {
+  .hero-gif img {
+    max-height: 40vh;
+  }
+}
+
+.starlight-aside {
+	padding: 1rem;
+	border-inline-start: 0.25rem solid var(--sl-color-asides-border);
+}
+.starlight-aside--note {
+	--sl-color-asides-text-accent: var(--color-cyan-700);
+	--sl-color-asides-border: var(--color-cyan-500);
+	background-color: var(--color-cyan-50);
+	color: var(--color-cyan-900);
+}
+.starlight-aside--tip {
+	--sl-color-asides-text-accent: var(--color-emerald-700);
+	--sl-color-asides-border: var(--color-emerald-500);
+	background-color: var(--color-emerald-50);
+	color: var(--color-emerald-900);
+}
+.starlight-aside--caution {
+	--sl-color-asides-text-accent: var(--color-amber-700);
+	--sl-color-asides-border: var(--color-amber-500);
+	background-color: var(--color-amber-50);
+	color: var(--color-amber-900);
+}
+.starlight-aside--danger {
+	--sl-color-asides-text-accent: var(--color-red-700);
+	--sl-color-asides-border: var(--color-red-500);
+	background-color: var(--color-red-50);
+	color: var(--color-red-900);
 }

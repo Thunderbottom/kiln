@@ -1,0 +1,454 @@
+---
+title: File Formats
+description: Detailed specification of kiln's file formats including encrypted storage, key formats, and configuration syntax.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Technical specification of all file formats used by kiln for configuration, keys, and encrypted data storage.
+
+## Configuration Format (TOML)
+
+Kiln uses TOML for human-readable configuration with strong typing and validation.
+
+### File Structure
+
+```toml
+# Recipients with public keys
+[recipients]
+name = "public-key-string"
+
+# Optional groups for access management  
+[groups]
+group-name = ["recipient1", "recipient2"]
+
+# Environment file definitions
+[files.environment-name]
+filename = "relative/path/to/file"
+access = ["recipient-or-group"]
+```
+
+### TOML Compliance
+
+<Aside type="note">
+Kiln follows TOML v1.0.0 specification with strict parsing and comprehensive error reporting.
+</Aside>
+
+- **Version**: TOML v1.0.0 compliant
+- **Encoding**: UTF-8 required
+- **Comments**: `#` prefix supported throughout
+- **Whitespace**: Flexible indentation and spacing
+- **Case sensitivity**: Keys are case-sensitive
+
+### Validation Rules
+
+**Section requirements:**
+- `[recipients]` section is mandatory
+- `[files]` section is mandatory  
+- `[groups]` section is optional
+
+**Data types:**
+- Recipient keys: strings (validated as public keys)
+- Group members: arrays of strings
+- File paths: strings (validated for security)
+- Access lists: arrays of strings
+
+## Private Key Formats
+
+### Age Private Keys
+
+Standard age format with X25519 elliptic curve cryptography.
+
+```
+AGE-SECRET-KEY-1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF1234567890ABCDEF
+```
+
+**Format specification:**
+- Prefix: `AGE-SECRET-KEY-`
+- Encoding: Bech32
+- Length: 74 characters total
+- Key material: 32 bytes (256 bits)
+
+**File structure:**
+```
+AGE-SECRET-KEY-1QYQQ5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5Q5QQ
+```
+
+### SSH Private Keys
+
+Standard OpenSSH private key formats supported.
+
+**Ed25519 format:**
+```
+-----BEGIN OPENSSH PRIVATE KEY-----
+b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAFwAAAAdzc2gtZW
+QyNTUxOQAAACAbcd...
+-----END OPENSSH PRIVATE KEY-----
+```
+
+**Legacy RSA format:**
+```
+-----BEGIN RSA PRIVATE KEY-----
+MIIEpAIBAAKCAQEA1234567890abcdef...
+-----END RSA PRIVATE KEY-----
+```
+
+**Encrypted SSH keys:**
+- Passphrase-protected keys supported
+- Prompts for passphrase during operation
+- Uses standard SSH agent for key management
+
+### File Permissions
+
+<Aside type="caution">
+Private key files must have restrictive permissions (0600) to prevent unauthorized access. Kiln enforces this requirement.
+</Aside>
+
+**Required permissions:**
+- Private keys: `0600` (read/write owner only)
+- Public keys: `0644` (read-only for others)
+- Configuration: `0644` (readable by others)
+
+## Public Key Formats
+
+### Age Public Keys
+
+```
+age1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+```
+
+**Format specification:**
+- Prefix: `age1`
+- Encoding: Bech32 with age charset
+- Length: 62 characters total
+- Key material: 32 bytes public key
+
+### SSH Public Keys
+
+**Ed25519 format:**
+```
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbM7ABCDEFGHIJKLMNOPQRSTUVWXYZ user@host
+```
+
+**RSA format:**
+```
+ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7... user@host
+```
+
+**ECDSA format:**
+```
+ssh-ecdsa AAAAE2VjZHNhLXNoYTItbmlzdHAyNTYAAAAIbmlzdHAyNTY... user@host
+```
+
+**Format components:**
+1. **Algorithm identifier**: Key type specification
+2. **Key material**: Base64-encoded public key
+3. **Comment**: Optional user@host identifier
+
+## Encrypted Environment Files
+
+Environment files use age encryption with authenticated encryption.
+
+### File Structure
+
+```
+age-encryption.org/v1
+-> X25519 recipient1-public-key
+-> X25519 recipient2-public-key
+--- encrypted-payload ---
+base64-encoded-encrypted-data
+more-base64-data
+```
+
+### Encryption Details
+
+<Aside type="tip">
+Age encryption provides forward secrecy and post-quantum resistance through X25519 key exchange and ChaCha20-Poly1305 AEAD.
+</Aside>
+
+**Encryption algorithm:**
+- Key exchange: X25519 elliptic curve
+- Symmetric encryption: ChaCha20-Poly1305 AEAD
+- Key derivation: HKDF-SHA256
+- MAC: Poly1305 authenticator
+
+**Security properties:**
+- Forward secrecy: Ephemeral key exchange
+- Authentication: Prevents tampering
+- Multiple recipients: Single file, multiple decryption keys
+- Quantum resistance: X25519 provides post-quantum security
+
+### Payload Format
+
+The encrypted payload contains environment variables in standard format:
+
+```
+KEY1=value1
+KEY2=value with spaces
+KEY3="quoted value"
+# Comments are preserved
+MULTILINE_KEY=line1\nline2
+```
+
+**Payload rules:**
+- UTF-8 encoding required
+- Unix line endings (`\n`) normalized
+- Maximum file size: 10MB (practical limit)
+- Variables follow shell environment syntax
+
+## Environment Variable Syntax
+
+### Standard Format
+
+```bash
+# Simple assignment
+DATABASE_URL=postgresql://localhost:5432/myapp
+
+# Values with spaces (quotes optional)
+API_ENDPOINT=https://api.example.com/v1
+MESSAGE="Hello, World!"
+
+# Empty values
+OPTIONAL_VAR=
+
+# Comments (preserved during editing)
+# Database configuration
+DB_HOST=localhost
+DB_PORT=5432
+```
+
+### Validation Rules
+
+**Variable names:**
+- Pattern: `^[a-zA-Z_][a-zA-Z0-9_]*$`
+- Case-sensitive
+- No length restrictions
+- Must start with letter or underscore
+
+**Variable values:**
+- UTF-8 encoding
+- Maximum length: 1MB per variable
+- No null bytes allowed
+- Newlines preserved as `\n`
+
+**Parsing behavior:**
+- Quotes removed if present: `KEY="value"` → `value`
+- Escaping supported: `KEY="value with \"quotes\""` → `value with "quotes"`
+- Environment expansion not supported (values are literal)
+
+### Special Characters
+
+```bash
+# Spaces and special characters
+PATH="/usr/local/bin:/usr/bin:/bin"
+COMMAND="echo 'Hello World'"
+
+# Newlines (escaped)
+MULTILINE="line1\nline2\nline3"
+
+# Shell special characters (literal)
+REGEX="^[a-zA-Z]+$"
+JSON='{"key": "value", "number": 42}'
+```
+
+## JSON Import Format
+
+The `set --from-file` command accepts JSON files with specific type handling.
+
+### Supported Structure
+
+```json
+{
+  "STRING_VAR": "text value",
+  "NUMBER_VAR": 42,
+  "FLOAT_VAR": 3.14,
+  "BOOLEAN_VAR": true,
+  "NULL_VAR": null
+}
+```
+
+### Type Conversion Rules
+
+**String values**: Used directly without modification
+**Numeric values**: 
+- Integers converted without decimal point: `42` → `"42"`
+- Floats converted with appropriate precision: `3.14` → `"3.14"`
+**Boolean values**: Converted to lowercase strings: `true` → `"true"`, `false` → `"false"`
+**Null values**: Converted to empty strings: `null` → `""`
+**Unsupported types**: Arrays and objects cause validation errors
+
+### Validation Constraints
+
+- Maximum 1,000 variables per JSON file
+- All variable names must follow standard validation rules
+- File must contain at least one valid variable
+- JSON syntax must be valid
+
+## Key Discovery Files
+
+### Discovery Order
+
+1. **Explicit path**: `--key` flag or `KILN_PRIVATE_KEY_FILE`
+2. **Age key**: `~/.kiln/kiln.key`
+3. **SSH Ed25519**: `~/.ssh/id_ed25519`
+4. **SSH RSA**: `~/.ssh/id_rsa`
+
+### Public Key Derivation
+
+**For age keys:**
+```bash
+# Private key file contains both private and public
+cat ~/.kiln/kiln.key
+# AGE-SECRET-KEY-1234...
+# Public key: age1234567890abcdef...
+
+# Public key in separate .pub file
+cat ~/.kiln/kiln.key.pub
+# age1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef
+```
+
+**For SSH keys:**
+```bash
+# Public key in standard .pub file
+cat ~/.ssh/id_ed25519.pub
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbM... user@host
+```
+
+## Compatibility and Interoperability
+
+### Age Tool Compatibility
+
+<Aside type="note">
+Kiln's encrypted files are fully compatible with the standard age tool, allowing for emergency access and interoperability.
+</Aside>
+
+Kiln-encrypted files can be decrypted with standard age:
+
+```bash
+# Decrypt with age tool
+age --decrypt --identity ~/.kiln/kiln.key encrypted.env
+
+# Encrypt with age tool for kiln
+age --encrypt --recipient age1234... --output encrypted.env plaintext.env
+```
+
+### SSH Agent Integration
+
+For SSH keys, kiln can integrate with SSH agent:
+
+```bash
+# Add key to agent
+ssh-add ~/.ssh/kiln_key
+
+# Kiln will use agent if available
+kiln get DATABASE_URL
+```
+
+## File System Layout
+
+### Standard Project Structure
+
+```
+project/
+├── kiln.toml              # Configuration file
+├── .kiln.env              # Default encrypted environment
+├── environments/
+│   ├── development.env    # Development environment
+│   ├── staging.env        # Staging environment
+│   └── production.env     # Production environment
+├── keys/
+│   ├── team-lead.key      # Private keys (not in VCS)
+│   └── team-lead.key.pub  # Public keys (in VCS)
+└── .gitignore            # Exclude private keys
+```
+
+### Version Control Patterns
+
+**Include in VCS:**
+- `kiln.toml` (configuration)
+- `*.env` (encrypted environment files)
+- `*.pub` (public key files)
+
+**Exclude from VCS:**
+```gitignore
+# Private keys
+*.key
+!*.pub
+
+# Temporary files
+.kiln-edit-*
+*.tmp
+```
+
+## Performance Characteristics
+
+### File Size Limits
+
+| Component | Limit | Reason |
+|-----------|-------|---------|
+| Environment file | 10MB | Memory usage during decryption |
+| Variable value | 1MB | Practical limit for environment variables |
+| Configuration file | 1MB | TOML parser limitations |
+| Recipients per file | 1000 | Encryption header size |
+
+### Encryption Overhead
+
+- **Header size**: ~100 bytes + 64 bytes per recipient
+- **Encryption overhead**: ~16 bytes (Poly1305 MAC)
+- **Base64 encoding**: ~33% size increase
+- **Total overhead**: ~50 bytes + ~33% of content size
+
+### Access Patterns
+
+**Optimized operations:**
+- Single file access (no cross-file operations)
+- Sequential variable access within file
+- Batch operations during editing
+
+**Performance considerations:**
+- Decryption required for any file access
+- Re-encryption required for any modifications
+- Memory usage scales with file size
+
+## Migration and Backup
+
+### Configuration Export
+
+```bash
+# Backup all environments in JSON format
+for env in $(grep '^\[files\.' kiln.toml | sed 's/\[files\.//;s/\]//'); do
+  kiln export --file "$env" --format json > "backup-${env}.json"
+done
+```
+
+### Recovery Procedures
+
+**Corrupted encrypted files:**
+```bash
+# Verify file integrity
+age --decrypt --identity ~/.kiln/kiln.key file.env >/dev/null
+
+# If corrupted, restore from backup
+cp backup/file.env file.env
+```
+
+**Invalid configuration:**
+```bash
+# Validate configuration syntax
+toml-lint kiln.toml
+
+# Reset to default configuration
+kiln init config --force
+```
+
+### Key Rotation Process
+
+```bash
+# Generate new keys
+kiln init key --path ./new.key
+
+# Add to configuration
+kiln rekey --file production --add-recipient "newkey=$(cat ./new.key.pub)"
+
+# Remove old keys (manual configuration edit required)
+```

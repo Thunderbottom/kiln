@@ -1,0 +1,222 @@
+---
+title: Adding Members
+description: Onboarding process for new team members with proper access grants and validation.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Streamlined process for adding new team members to kiln projects with appropriate access levels.
+
+## New Member Onboarding
+
+### Step 1: Key Generation
+
+**New member:**
+```bash
+# Generate personal key
+kiln init key
+
+# Or use existing SSH key
+ls ~/.ssh/id_*.pub
+```
+
+### Step 2: Public Key Sharing
+
+**New member shares public key:**
+```bash
+# Share age public key
+cat ~/.kiln/kiln.key.pub
+
+# Or SSH public key
+cat ~/.ssh/id_ed25519.pub
+```
+
+### Step 3: Access Grant
+
+**Team admin adds member:**
+```bash
+# Add to development first
+kiln rekey --file development --add-recipient "newmember=ssh-ed25519 AAAAC3..."
+
+# Add to staging when ready
+kiln rekey --file staging --add-recipient "newmember=ssh-ed25519 AAAAC3..."
+```
+
+## Progressive Access Model
+
+<Aside type="tip">
+Grant access progressively: start with development, move to staging after validation, then production based on role requirements.
+</Aside>
+
+### Development Access (Immediate)
+
+```bash
+# All new developers get development access
+kiln rekey --file development --add-recipient "newdev=age1new...key"
+```
+
+### Staging Access (After 1-2 weeks)
+
+```bash
+# Proven team members get staging access
+kiln rekey --file staging --add-recipient "newdev=age1new...key"
+
+# Update groups for easier management
+# Edit kiln.toml:
+# [groups]
+# developers = ["alice", "bob", "newdev"]
+```
+
+### Production Access (Role-based)
+
+```bash
+# Only senior developers and admins
+kiln rekey --file production --add-recipient "senior-dev=age1senior...key"
+```
+
+## Automation Integration
+
+### CI/CD Access
+
+```bash
+# Generate service account key
+kiln init key --path ./ci.key
+
+# Add to production for deployments
+kiln rekey --file production --add-recipient "ci-deploy=$(cat ./ci.key.pub)"
+
+# Store private key in CI secrets
+# CI_KILN_PRIVATE_KEY=$(cat ./ci.key)
+```
+
+### Service Accounts
+
+```bash
+# Monitoring service
+kiln rekey --file production --add-recipient "monitoring=age1monitor...key"
+
+# Backup service
+kiln rekey --file production --add-recipient "backup=age1backup...key"
+```
+
+## Bulk Member Addition
+
+### Multiple New Hires
+
+```bash
+# Add multiple developers at once
+kiln rekey --file development \
+  --add-recipient "dev1=ssh-ed25519 AAAAC3..." \
+  --add-recipient "dev2=age1234...abcd" \
+  --add-recipient "dev3=ssh-rsa AAAAB3..."
+```
+
+### Team Reorganization
+
+```toml
+# Update groups after team changes
+[groups]
+frontend = ["alice", "newdev1", "newdev2"]
+backend = ["bob", "charlie", "newdev3"]
+devops = ["admin", "senior-dev"]
+```
+
+## Access Validation
+
+### New Member Verification
+
+```bash
+# New member tests their access
+kiln info --verify
+
+# Test specific environments
+kiln get DATABASE_URL --file development
+kiln export --file staging --format json >/dev/null
+```
+
+### Admin Verification
+
+```bash
+# Verify new member can access intended environments
+environments=("development" "staging")
+for env in "${environments[@]}"; do
+  echo "Testing $env access for newmember:"
+  if kiln info --file "$env" --key "keys/newmember.key" --verify 2>/dev/null; then
+    echo "  ✓ Access granted"
+  else
+    echo "  ✗ Access denied"
+  fi
+done
+```
+
+## Common Patterns
+
+### GitHub Integration
+
+```bash
+# Fetch public keys from GitHub
+github_user="newdeveloper"
+kiln rekey --file development --add-recipient "$github_user=$(curl -s https://github.com/$github_user.keys | head -n1)"
+```
+
+### Role-Based Templates
+
+```bash
+# Junior developer template
+junior_envs=("development")
+
+# Senior developer template  
+senior_envs=("development" "staging")
+
+# DevOps engineer template
+devops_envs=("development" "staging" "production")
+
+for env in "${devops_envs[@]}"; do
+  kiln rekey --file "$env" --add-recipient "newdevops=age1devops...key"
+done
+```
+
+## Error Recovery
+
+### Invalid Key Addition
+
+```bash
+# If wrong key was added, generate new configuration
+kiln init config --force --recipients "correct-user=age1correct...key"
+
+# Re-encrypt all files with corrected access
+for env in development staging production; do
+  if [ -f "${env}.env" ]; then
+    kiln rekey --file "$env" --add-recipient "correct-user=age1correct...key"
+  fi
+done
+```
+
+### Access Verification Failures
+
+```bash
+# Debug access issues
+kiln info --file development --verify --verbose
+
+# Check configuration consistency
+grep -A 20 "\[recipients\]" kiln.toml
+grep -A 10 "\[files.development\]" kiln.toml
+```
+
+## Offboarding Process
+
+### Remove Access
+
+```bash
+# Manual removal (requires configuration edit)
+# 1. Remove from [recipients] section
+# 2. Remove from [groups] if applicable
+# 3. Re-encrypt affected files
+
+# Re-encrypt without removed member
+for env in staging production; do
+  kiln export --file "$env" --format json > "/tmp/${env}-backup.json"
+  # Remove recipient from kiln.toml
+  kiln set --from-file "/tmp/${env}-backup.json" --file "$env"
+done
+```

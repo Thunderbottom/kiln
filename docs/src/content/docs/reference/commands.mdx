@@ -1,0 +1,327 @@
+---
+title: Command Reference
+description: Exhaustive reference for all kiln commands, options, and arguments with syntax examples.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Complete reference for all kiln commands, global options, and usage patterns.
+
+## Global Options
+
+Available for all commands:
+
+| Option | Short | Description | Default |
+|--------|-------|-------------|---------|
+| `--config` | `-c` | Configuration file path | `kiln.toml` |
+| `--key` | `-k` | Private key file path | Auto-discovered |
+| `--verbose` | `-v` | Enable verbose output | `false` |
+| `--help` | `-h` | Show help information | - |
+| `--version` | - | Show version information | - |
+
+## init
+
+Initialize new kiln projects.
+
+### init key
+
+Generate encryption key pairs.
+
+```bash
+kiln init key [--path PATH] [--encrypt] [--force]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--path` | Key file location | `~/.kiln/kiln.key` |
+| `--encrypt` | Protect with passphrase | `false` |
+| `--force` | Overwrite existing files | `false` |
+
+### init config
+
+Create configuration files.
+
+```bash
+kiln init config [--path PATH] [--recipients NAME=KEY...] [--force]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--path` | Configuration file location | `kiln.toml` |
+| `--recipients` | Named recipients (repeatable) | - |
+| `--force` | Overwrite existing config | `false` |
+
+## set
+
+Add or update environment variables.
+
+```bash
+kiln set <name> [value] [--file FILE]
+```
+
+| Argument/Option | Description | Required |
+|-----------------|-------------|----------|
+| `<name>` | Variable name | No (if `--from-file` is specified) |
+| `[value]` | Variable value | No (prompts if omitted) |
+| `--file`, `-f` | Environment file | No (`default`) |
+| `--from-file` | JSON file to load variables from | No |
+
+<Aside type="note">
+Variable names must match pattern `^[a-zA-Z_][a-zA-Z0-9_]*$` (letters, numbers, underscores only).
+</Aside>
+
+## get
+
+Retrieve environment variables.
+
+```bash
+kiln get <name> [--file FILE] [--format FORMAT]
+```
+
+| Argument/Option | Description | Values | Default |
+|-----------------|-------------|--------|---------|
+| `<name>` | Variable name | - | Required |
+| `--file`, `-f` | Environment file | - | `default` |
+| `--format` | Output format | `value`, `json` | `value` |
+
+## edit
+
+Interactive environment editing.
+
+```bash
+kiln edit [--file FILE] [--editor EDITOR]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--file`, `-f` | Environment file | `default` |
+| `--editor` | Editor command | `$EDITOR` |
+
+## export
+
+Output environment variables.
+
+```bash
+kiln export [--file FILE] [--format FORMAT]
+```
+
+| Option | Description | Values | Default |
+|--------|-------------|--------|---------|
+| `--file`, `-f` | Environment file | - | `default` |
+| `--format` | Output format | `shell`, `json`, `yaml` | `shell` |
+
+## run
+
+Execute commands with environment.
+
+```bash
+kiln run [OPTIONS] -- <command> [args...]
+```
+
+| Option | Description | Example |
+|--------|-------------|---------|
+| `--file`, `-f` | Environment file | `production` |
+| `--dry-run` | Show variables without execution | - |
+| `--timeout` | Command timeout | `30s`, `5m`, `1h` |
+| `--workdir` | Working directory | `/app` |
+| `--shell` | Execute through shell | - |
+
+<Aside type="caution">
+The `--` separator is required to separate kiln options from the arguments of the command being executed.
+</Aside>
+
+## rekey
+
+Add recipients and rotate keys.
+
+```bash
+kiln rekey --file FILE --add-recipient NAME=KEY [OPTIONS]
+```
+
+| Option | Description | Required |
+|--------|-------------|----------|
+| `--file`, `-f` | Environment file | Yes |
+| `--add-recipient` | Named recipient (repeatable) | Yes |
+| `--force` | Skip confirmations | No |
+
+## info
+
+Display file status and verification.
+
+```bash
+kiln info [--file FILE] [--verify]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--file`, `-f` | Specific file (or all files) | All files |
+| `--verify` | Test decryption capability | `false` |
+
+## Exit Codes
+
+| Code | Meaning | Commands |
+|------|---------|----------|
+| `0` | Success | All |
+| `1` | General error | All |
+| `N` | Command exit code | `run` (propagates target command's exit code) |
+
+### Error Categories
+
+**Configuration errors (exit 1):**
+- Invalid or missing configuration file
+- Invalid recipient references
+- Access control violations
+
+**Validation errors (exit 1):**
+- Invalid variable names
+- Invalid file paths
+- Invalid command arguments
+
+**Security errors (exit 1):**
+- Access denied to environment files
+- Invalid or missing private keys
+- Decryption failures
+
+**Command execution behavior:**
+- Target command exit code propagated
+- Target command not found (exit 1)
+- Command timeout (exit 1)
+
+## Environment Variables
+
+### Configuration
+
+| Variable | Description | Example |
+|----------|-------------|---------|
+| `KILN_PRIVATE_KEY_FILE` | Override key discovery | `~/.ssh/kiln_key` |
+| `EDITOR` | Default editor for `edit` command | `vim`, `code --wait` |
+
+### Runtime Behavior
+
+| Variable | Description | Used By |
+|----------|-------------|---------|
+| `PATH` | Command discovery | `run` |
+| `TMPDIR` | Temporary file location | `edit` |
+
+## Input Validation
+
+### Variable Names
+
+<Aside type="tip">
+Variable names follow environment variable conventions: start with letter or underscore, contain only alphanumeric characters and underscores.
+</Aside>
+
+- Pattern: `^[a-zA-Z_][a-zA-Z0-9_]*$`
+- Case-sensitive
+- No length limit (practical limit ~1MB for entire file)
+
+**Valid examples:**
+- `DATABASE_URL`
+- `API_KEY_V2`
+- `_PRIVATE_VAR`
+
+**Invalid examples:**
+- `api-key` (contains hyphen)
+- `123_VAR` (starts with number)
+- `var.name` (contains dot)
+
+### File Names
+
+- Must not contain `..` (directory traversal prevention)
+- Must not contain `/` in logical names
+- Relative paths resolved from configuration directory
+
+### Key Formats
+
+**Age public keys:**
+- Format: `age1[a-z0-9]{58}`
+- Length: 62 characters total
+- Encoding: Bech32
+
+**SSH public keys:**
+- Ed25519: `ssh-ed25519 [A-Za-z0-9+/=]+ [comment]`
+- RSA: `ssh-rsa [A-Za-z0-9+/=]+ [comment]`
+- ECDSA: `ssh-ecdsa [A-Za-z0-9+/=]+ [comment]`
+
+## Command Composition
+
+### Chaining Commands
+
+```bash
+# Set multiple variables
+kiln set DATABASE_URL "postgres://..." --file prod
+kiln set API_KEY "sk-..." --file prod
+
+# Verify and run
+kiln info --file prod --verify && kiln run --file prod -- ./deploy.sh
+```
+
+### Pipeline Integration
+
+```bash
+# Export for processing
+kiln export --format json | jq '.DATABASE_URL'
+
+# Conditional execution
+if kiln get DEBUG --file dev >/dev/null 2>&1; then
+  kiln run --file dev -- npm run dev
+fi
+```
+
+### Error Handling
+
+```bash
+# Robust script pattern
+set -euo pipefail
+
+if ! kiln info --file production --verify; then
+  echo "Cannot access production environment" >&2
+  exit 1
+fi
+
+kiln run --file production -- ./deploy.sh
+```
+
+## Common Patterns
+
+### Project Initialization
+
+```bash
+# 1. Generate key
+kiln init key
+
+# 2. Create config with your key
+kiln init config --recipients "$(whoami)=$(cat ~/.kiln/kiln.key.pub)"
+
+# 3. Set initial variables
+kiln set DATABASE_URL
+kiln set API_KEY
+```
+
+### Team Onboarding
+
+```bash
+# Add new team member
+kiln rekey --file development --add-recipient "newdev=ssh-ed25519 AAAAC3..."
+kiln rekey --file staging --add-recipient "newdev=ssh-ed25519 AAAAC3..."
+```
+
+### CI/CD Integration
+
+```bash
+# Validate access
+kiln info --file production --verify
+
+# Deploy with environment
+kiln run --file production --timeout 10m -- ./deploy.sh
+```
+
+### Development Workflow
+
+```bash
+# Load development environment
+eval "$(kiln export --file development)"
+
+# Or run directly
+kiln run --file development -- npm start
+```

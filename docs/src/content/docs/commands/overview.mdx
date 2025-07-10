@@ -1,0 +1,70 @@
+---
+title: Commands Overview
+---
+
+import { Aside, LinkButton } from '@astrojs/starlight/components';
+
+Kiln provides a set of focused commands for managing encrypted environment variables with role-based access control. Each command is designed to be secure by default and composable with standard Unix tools.
+
+## Command Structure
+
+All kiln commands follow a consistent pattern:
+
+```bash
+kiln [global-options] <command> [command-options] [arguments]
+```
+
+### Global Options
+
+- `--config`, `-c`: Configuration file path (default: `kiln.toml`)
+- `--key`, `-k`: Private key file path (auto-discovered if not specified)
+- `--verbose`, `-v`: Enable verbose output for debugging
+- `--help`, `-h`: Show help information
+- `--version`: Show version information
+
+### File Selection
+
+Most commands accept a `--file` or `-f` option to specify which environment file to operate on. This corresponds to entries in your `kiln.toml` configuration.
+
+## Command Categories
+
+### Initialization Commands
+- [`init key`](/commands/init/#init-key) - Generate encryption keys
+- [`init config`](/commands/init/#init-config) - Create configuration files
+
+### Variable Management
+- [`set`](/commands/set) - Add, update, or bulk import environment variables
+- [`get`](/commands/get) - Retrieve specific variables
+- [`edit`](/commands/edit) - Interactive editing of environment files
+
+### Output and Integration
+- [`export`](/commands/export) - Output variables in various formats
+- [`run`](/commands/run) - Execute commands with injected environment
+
+### Administration
+- [`rekey`](/commands/rekey) - Add recipients and rotate encryption
+- [`info`](/commands/info) - Display file status and verification
+
+All commands use encrypted storage with role-based access control.
+
+## Error Handling
+
+Kiln commands use semantic exit codes:
+
+- `0`: Success
+- `1`: General error (validation, configuration, access denied)
+- `2`: Command execution error (for `run` command)
+
+Error messages are designed to be actionable and include suggestions for resolution.
+
+## Examples
+
+For detailed examples and workflows, see individual command pages and [Team Setup Guide](/workflows/team-setup/).
+
+## Next Steps
+
+Ready to dive deeper? Explore specific commands and workflows for your team's needs:
+
+<LinkButton href="/commands/init/" variant="primary">Initialize Your Project</LinkButton>
+<LinkButton href="/workflows/team-setup/" variant="secondary">Set Up Team Access</LinkButton>
+<LinkButton href="/reference/commands/" variant="minimal">Complete Command Reference</LinkButton>

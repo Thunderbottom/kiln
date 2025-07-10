@@ -1,0 +1,215 @@
+---
+title: Frequently Asked Questions
+description: Common questions about kiln usage, security, and deployment patterns.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Common questions about using kiln for environment variable management.
+
+## Tool Comparison
+
+### Why use kiln over tools like Infisical or Vault?
+
+kiln is designed for teams that prioritize simplicity and offline capabilities:
+
+**Infisical/Vault require infrastructure:**
+- Running servers and databases
+- Network connectivity for deployments
+- Account management and authentication
+- Backup and maintenance procedures
+
+**kiln is infrastructure-free:**
+- Files travel with your code
+- Works completely offline
+- No servers to maintain or accounts to manage
+- Deployments work even when external services are down
+
+Choose kiln if you want secrets that live with your code and don't require external dependencies. Choose hosted solutions if you need advanced features like secret rotation, audit logs, or integration with enterprise identity systems.
+
+### How does kiln compare to SOPS?
+
+Both kiln and SOPS encrypt files for version control, but kiln is specifically designed for environment variables:
+
+**SOPS** is a general file encryption tool that works with YAML, JSON, and other formats
+**kiln** provides environment variable workflows with commands like `run`, `export`, and team management
+
+kiln is essentially "SOPS for .env files" with a focus on development team workflows.
+
+## Repository and Version Control
+
+### I have a public repository and don't want to commit encrypted secrets. How do I use kiln?
+
+You have several options for keeping encrypted files separate from your main codebase:
+
+**Option 1: Git Submodules**
+```bash
+# Create a private repository for secrets
+git submodule add git@github.com:yourorg/yourapp-secrets.git secrets
+
+# Structure your project
+yourapp/
+├── src/
+├── secrets/           # Private submodule
+│   ├── kiln.toml
+│   ├── dev.env
+│   └── prod.env
+└── README.md
+
+# Use secrets from the submodule
+cd secrets && kiln run --file production -- ../deploy.sh
+```
+
+**Option 2: Separate Secrets Repository**
+Keep a completely separate private repository and clone it during deployment:
+```bash
+# In your deployment pipeline
+git clone git@github.com:yourorg/yourapp-secrets.git
+cd yourapp-secrets
+kiln run --file production -- ../yourapp/deploy.sh
+```
+
+**Option 3: Local Secrets Only**
+Use kiln locally for development but rely on environment variables or other secret management in production:
+```bash
+# Development (local kiln)
+kiln run -- npm run dev
+
+# Production (environment variables)
+DATABASE_URL=$PROD_DB npm start
+```
+
+<Aside type="tip">
+Git submodules are the most common pattern as they keep secrets versioned with your application while maintaining separation.
+</Aside>
+
+## Security and Access
+
+### How secure is age encryption?
+
+Age uses modern cryptographic primitives:
+- **X25519** for key exchange (same as Signal, WireGuard)
+- **ChaCha20-Poly1305** for authenticated encryption
+- **HKDF** for key derivation
+
+Age was designed by cryptography experts as a replacement for GPG with a focus on simplicity and correctness. It's used by many security-conscious projects and has undergone security review.
+
+### What happens if someone leaves the team?
+
+When someone leaves:
+
+1. **Remove them from kiln.toml** recipients and groups
+2. **Re-encrypt all files** they had access to:
+   ```bash
+   # They'll no longer be able to decrypt new versions
+   kiln set --from-file backup.json --file production
+   ```
+3. **Rotate actual secrets** if necessary (API keys, database passwords, etc.)
+
+<Aside type="caution">
+Removing someone from kiln only prevents access to future updates. They can still decrypt versions they had access to before removal.
+</Aside>
+
+### Can I use kiln with CI/CD?
+
+Yes, kiln works well in automated environments:
+
+```bash
+# Store kiln private key in CI secrets
+# Then in your pipeline:
+echo "$KILN_PRIVATE_KEY" > /tmp/ci.key
+kiln run --key /tmp/ci.key --file production -- ./deploy.sh
+```
+
+You can also export variables for tools that expect environment variables:
+```bash
+eval "$(kiln export --file production)"
+docker run --env-file <(kiln export --file production --format shell) myapp
+```
+
+## Usage Patterns
+
+### Should I commit kiln.toml to version control?
+
+**Yes, always commit kiln.toml.** It contains only:
+- Public keys (safe to share)
+- Access control configuration
+- File definitions
+
+Never commit private keys (`*.key` files) - only public keys (`*.key.pub` files) go in the configuration.
+
+### How do I handle different environments?
+
+Use separate files for each environment with different access controls:
+
+```toml
+[files.development]
+filename = "dev.env"
+access = ["*"]  # Everyone
+
+[files.staging]
+filename = "staging.env"  
+access = ["developers"]
+
+[files.production]
+filename = "prod.env"
+access = ["admins"]
+```
+
+This gives you environment separation with role-based access.
+
+### Can I use kiln for non-environment variables?
+
+While kiln is optimized for environment variables, you can store any key-value data:
+
+```bash
+# API configurations
+kiln set STRIPE_WEBHOOK_SECRET
+kiln set TWILIO_ACCOUNT_SID
+
+# Feature flags
+kiln set ENABLE_NEW_FEATURE true
+
+# Service URLs
+kiln set PAYMENT_SERVICE_URL https://payments.internal
+```
+
+The `KEY=value` format works for most configuration data.
+
+## Troubleshooting
+
+### Why can't I decrypt a file?
+
+Common causes:
+1. **Wrong private key** - Make sure you're using the key that corresponds to a recipient in the file
+2. **Not in access list** - Check that you're listed in the file's access configuration
+3. **File corruption** - Verify the encrypted file hasn't been modified
+
+Debug with:
+```bash
+kiln info --file yourfile --verify --verbose
+```
+
+### My team member can't access files after I added them
+
+Check that:
+1. Their public key is correctly formatted in kiln.toml
+2. They're included in the access list for the specific file
+3. You've re-encrypted the file after adding them:
+   ```bash
+   kiln rekey --file development --add-recipient "newperson=their-public-key"
+   ```
+
+### How do I migrate from another secret management tool?
+
+Most tools can export in JSON format:
+
+```bash
+# Export from your current tool to JSON
+your-tool export --format json > secrets.json
+
+# Import into kiln
+kiln set --from-file secrets.json --file production
+```
+
+You may need to transform the JSON structure to match kiln's `{"KEY": "value"}` format.

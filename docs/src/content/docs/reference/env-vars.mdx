@@ -1,0 +1,334 @@
+---
+title: Environment Variables
+description: Runtime environment variables that control kiln behavior and integration patterns.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Environment variables that influence kiln's runtime behavior, key discovery, and integration capabilities.
+
+## Configuration Variables
+
+### `KILN_PRIVATE_KEY_FILE`
+
+Override automatic key discovery with explicit key file path.
+
+<Aside type="tip">
+Use this in CI/CD environments or when you have multiple keys and need to specify which one to use.
+</Aside>
+
+**Usage:**
+```bash
+export KILN_PRIVATE_KEY_FILE=/path/to/specific.key
+kiln get DATABASE_URL --file production
+```
+
+**Behavior:**
+- Takes precedence over automatic key discovery
+- Must point to readable private key file
+- Supports both age and SSH private keys
+- Path can be absolute or relative to current directory
+
+**Common scenarios:**
+```bash
+# CI/CD with specific deployment key
+export KILN_PRIVATE_KEY_FILE=/secrets/deploy.key
+
+# Multiple team members on shared system
+export KILN_PRIVATE_KEY_FILE=~/.kiln/team-lead.key
+
+# Testing with different access levels
+export KILN_PRIVATE_KEY_FILE=./keys/readonly.key
+```
+
+### `KILN_CONFIG_FILE`
+
+Override default configuration file location.
+
+**Default:** `kiln.toml` in current directory
+
+**Usage:**
+```bash
+export KILN_CONFIG_FILE=/etc/kiln/global.toml
+kiln info --verify
+```
+
+**Use cases:**
+- System-wide configuration in `/etc/kiln/`
+- Project-specific config in subdirectories
+- Multi-environment setups with different configs
+
+## Editor Integration
+
+### `EDITOR`
+
+Specifies the editor for the `edit` command.
+
+<Aside type="note">
+The editor must support waiting for file closure. GUI editors typically need a `--wait` flag.
+</Aside>
+
+**Common configurations:**
+```bash
+# Terminal editors (synchronous by default)
+export EDITOR=vim
+export EDITOR=nano
+export EDITOR=emacs
+
+# GUI editors (require wait flag)
+export EDITOR="code --wait"
+export EDITOR="subl --wait"
+export EDITOR="atom --wait"
+```
+
+**Editor requirements:**
+- Must exit only after file editing is complete
+- Should support text file editing
+- Must be available in system PATH
+
+## System Integration
+
+### `PATH`
+
+Used by the `run` command for executable discovery.
+
+**Behavior:**
+- Standard PATH resolution for command execution
+- Relative paths resolved from working directory
+- Commands must be executable and accessible
+
+### `TMPDIR`
+
+Controls temporary file location for the `edit` command.
+
+**Default:** System default (`/tmp` on Unix, `%TEMP%` on Windows)
+
+**Security considerations:**
+```bash
+# Use memory-backed filesystem for enhanced security
+export TMPDIR=/dev/shm
+
+# Use project-specific temp directory
+export TMPDIR=./.tmp
+```
+
+## CI/CD Variables
+
+### Common Integration Patterns
+
+**GitHub Actions:**
+```yaml
+env:
+  KILN_PRIVATE_KEY_FILE: ${{ secrets.KILN_PRIVATE_KEY }}
+  KILN_CONFIG_FILE: .github/kiln.toml
+```
+
+**GitLab CI:**
+```yaml
+variables:
+  KILN_PRIVATE_KEY_FILE: /tmp/deploy.key
+before_script:
+  - echo "$KILN_PRIVATE_KEY" > /tmp/deploy.key
+  - chmod 600 /tmp/deploy.key
+```
+
+**Docker builds:**
+```dockerfile
+ENV KILN_PRIVATE_KEY_FILE=/secrets/kiln.key
+ENV KILN_CONFIG_FILE=/app/kiln.toml
+```
+
+## Runtime Behavior Variables
+
+### Key Discovery Order
+
+When `KILN_PRIVATE_KEY_FILE` is not set, kiln searches in order:
+
+1. `~/.kiln/kiln.key` (age key)
+2. `~/.ssh/id_ed25519` (SSH Ed25519)
+3. `~/.ssh/id_rsa` (SSH RSA)
+
+**Override with explicit setting:**
+```bash
+export KILN_PRIVATE_KEY_FILE=~/.ssh/company_key
+```
+
+### Configuration Resolution
+
+1. `KILN_CONFIG_FILE` if set
+2. `--config` command line flag
+3. `kiln.toml` in current directory
+
+**Precedence example:**
+```bash
+# Environment variable (lowest precedence)
+export KILN_CONFIG_FILE=global.toml
+
+# Command flag overrides environment
+kiln get VAR --config project.toml
+```
+
+## Security Considerations
+
+### Sensitive Data
+
+<Aside type="caution">
+Never set private keys directly in environment variables. Use file paths instead to maintain proper file permissions and avoid exposure in process lists.
+</Aside>
+
+**Secure pattern:**
+```bash
+# ✓ Good - file path only
+export KILN_PRIVATE_KEY_FILE=/secure/path/key.pem
+
+# ✗ Bad - sensitive data in environment
+export KILN_PRIVATE_KEY="AGE-SECRET-KEY-..."
+```
+
+### File Permissions
+
+Ensure referenced files have appropriate permissions:
+
+```bash
+# Private key files
+chmod 600 $KILN_PRIVATE_KEY_FILE
+
+# Configuration files  
+chmod 644 $KILN_CONFIG_FILE
+```
+
+## Debugging and Troubleshooting
+
+### Verbose Output
+
+Use `--verbose` flag to see environment variable resolution:
+
+```bash
+kiln --verbose get DATABASE_URL
+# Shows: Loading config from /path/to/kiln.toml
+# Shows: Using private key /path/to/key.pem
+```
+
+### Variable Verification
+
+Check current environment settings:
+
+```bash
+# Show all kiln-related variables
+env | grep KILN
+
+# Verify file accessibility
+ls -la "$KILN_PRIVATE_KEY_FILE"
+ls -la "$KILN_CONFIG_FILE"
+```
+
+### Common Issues
+
+**Key file not found:**
+```bash
+# Check if variable is set
+echo "$KILN_PRIVATE_KEY_FILE"
+
+# Verify file exists and is readable
+test -r "$KILN_PRIVATE_KEY_FILE" && echo "OK" || echo "Not accessible"
+```
+
+**Editor not waiting:**
+```bash
+# Test editor behavior
+echo "test" > /tmp/test.txt
+$EDITOR /tmp/test.txt
+# Should wait for editor to close before continuing
+```
+
+## Integration Examples
+
+### Development Environment
+
+```bash
+# .env.local or shell profile
+export KILN_CONFIG_FILE=./config/dev-kiln.toml
+export KILN_PRIVATE_KEY_FILE=~/.kiln/dev.key
+export EDITOR="code --wait"
+```
+
+### Production Deployment
+
+```bash
+# Deployment script
+export KILN_CONFIG_FILE=/etc/kiln/production.toml
+export KILN_PRIVATE_KEY_FILE=/secrets/deploy.key
+export TMPDIR=/dev/shm  # Memory-backed for security
+
+kiln run --file production -- ./deploy.sh
+```
+
+### Multi-User System
+
+```bash
+# System administrator setup
+export KILN_CONFIG_FILE=/etc/kiln/system.toml
+
+# Individual user override
+export KILN_PRIVATE_KEY_FILE=~/.kiln/personal.key
+```
+
+### Testing Framework
+
+```bash
+# Test script setup
+export KILN_CONFIG_FILE=test/fixtures/test.toml
+export KILN_PRIVATE_KEY_FILE=test/fixtures/test.key
+
+# Run tests with isolated environment
+kiln run --file test -- npm test
+```
+
+## Best Practices
+
+### Environment Isolation
+
+Use different variables for different contexts:
+
+```bash
+# Development
+export KILN_CONFIG_FILE=dev.toml
+export KILN_PRIVATE_KEY_FILE=~/.kiln/dev.key
+
+# Production  
+export KILN_CONFIG_FILE=prod.toml
+export KILN_PRIVATE_KEY_FILE=/secure/prod.key
+```
+
+### Script Integration
+
+Set variables at script level for consistency:
+
+```bash
+#!/bin/bash
+set -euo pipefail
+
+# Set kiln environment
+export KILN_CONFIG_FILE="${KILN_CONFIG_FILE:-./kiln.toml}"
+export KILN_PRIVATE_KEY_FILE="${KILN_PRIVATE_KEY_FILE:-~/.kiln/kiln.key}"
+
+# Use kiln commands
+kiln info --verify
+kiln run --file production -- ./deploy.sh
+```
+
+### Error Handling
+
+Validate environment before operations:
+
+```bash
+# Check required variables are set
+: "${KILN_PRIVATE_KEY_FILE:?KILN_PRIVATE_KEY_FILE must be set}"
+: "${KILN_CONFIG_FILE:?KILN_CONFIG_FILE must be set}"
+
+# Verify files exist
+if [[ ! -r "$KILN_PRIVATE_KEY_FILE" ]]; then
+  echo "Cannot read private key: $KILN_PRIVATE_KEY_FILE" >&2
+  exit 1
+fi
+```

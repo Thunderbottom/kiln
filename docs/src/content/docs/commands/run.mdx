@@ -1,0 +1,410 @@
+---
+title: run
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Execute commands with decrypted environment variables automatically injected.
+
+## Synopsis
+
+```bash
+kiln run [options] -- <command> [args...]
+```
+
+The `run` command decrypts environment variables and executes the specified command with those variables injected into the process environment, providing seamless integration with existing applications.
+
+## Arguments
+
+- `<command>`: Command to execute (required)
+- `[args...]`: Arguments to pass to the command
+
+## Options
+
+- `--file`, `-f`: Environment file to use (default: `default`)
+- `--dry-run`: Show environment variables without running command
+- `--timeout`: Command execution timeout (e.g., `30s`, `5m`, `1h`)
+- `--workdir`: Working directory for command execution
+- `--shell`: Run command through shell (`/bin/sh -c`)
+
+## Examples
+
+### Basic Command Execution
+```bash
+kiln run -- node server.js
+kiln run -- python manage.py runserver
+kiln run -- ./myapp --port 8080
+```
+
+### With Specific Environment
+```bash
+kiln run --file production -- ./deploy.sh
+kiln run --file development -- npm start
+```
+
+### Dry Run
+```bash
+kiln run --dry-run -- node server.js
+# Would execute: node server.js
+# Environment file: default
+# Variables: 3
+#   DATABASE_URL=postgresql://localhost:5432/myapp
+#   API_KEY=sk-1234567890abcdef
+#   DEBUG_MODE=true
+```
+
+### With Timeout
+```bash
+kiln run --timeout 30s -- ./slow-process
+kiln run --timeout 5m -- npm test
+```
+
+### Custom Working Directory
+```bash
+kiln run --workdir /app -- ./run.sh
+kiln run --workdir ./backend -- npm start
+```
+
+### Shell Execution
+```bash
+kiln run --shell -- 'echo "Database: $DATABASE_URL"'
+kiln run --shell -- 'for i in {1..3}; do echo "API: $API_KEY"; done'
+```
+
+## Environment Variable Injection
+
+### Process Environment
+The command inherits the current environment and adds/overrides with decrypted variables:
+```bash
+# Current environment
+export NODE_ENV=development
+export PATH=/usr/bin:/bin
+
+# Kiln adds decrypted variables
+kiln run -- node -e 'console.log(process.env)'
+# Output includes: NODE_ENV, PATH, DATABASE_URL, API_KEY, etc.
+```
+
+### Variable Precedence
+1. Kiln decrypted variables (highest priority)
+2. Existing environment variables
+3. System default variables
+
+### Secure Handling
+
+<Aside type="note">
+Variables are injected directly into process memory without intermediate files or shell exports. Automatic cleanup occurs when the command completes.
+</Aside>
+
+- Variables are injected directly into process memory
+- No intermediate files or shell variable exports
+- Automatic cleanup when command completes
+
+## Command Execution
+
+### Direct Execution
+By default, commands are executed directly without shell interpretation:
+```bash
+kiln run -- myapp --config /etc/myapp.conf
+# Executes: execve("myapp", ["myapp", "--config", "/etc/myapp.conf"], env)
+```
+
+### Shell Execution
+With `--shell`, commands are interpreted by `/bin/sh`:
+```bash
+kiln run --shell -- 'echo "Starting with DB: $DATABASE_URL"'
+# Executes: execve("/bin/sh", ["/bin/sh", "-c", "echo \"Starting with DB: $DATABASE_URL\""], env)
+```
+
+### Path Resolution
+- Relative paths are resolved from working directory
+- `./` and `../` prefixes are supported
+- Commands are found using `PATH` environment variable
+
+## Error Handling
+
+### Command Not Found
+```bash
+kiln run -- nonexistent-command
+# Error: command failed: exec: "nonexistent-command": executable file not found in $PATH
+```
+
+### Access Denied
+```bash
+kiln run --file production -- ./app
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+```
+
+### Command Timeout
+```bash
+kiln run --timeout 5s -- sleep 10
+# Error: command failed: context deadline exceeded
+```
+
+### Exit Code Propagation
+
+<Aside type="note">
+The `run` command preserves and propagates the exact exit code of the executed command, enabling proper integration with scripts and CI/CD systems.
+</Aside>
+
+```bash
+kiln run -- false
+echo $?  # 1 (command exit code preserved)
+
+kiln run -- exit 42
+echo $?  # 42 (custom exit codes preserved)
+```
+
+## Signal Handling
+
+### Interrupt Handling
+- `Ctrl+C` (SIGINT) is forwarded to the running command
+- Graceful shutdown allows command cleanup
+- Kiln waits for command termination before exiting
+
+### Process Group Management
+- Commands run in their own process group
+- Signal forwarding ensures proper cleanup
+- Timeout handling uses context cancellation
+
+## Integration Patterns
+
+### Application Startup
+```bash
+# Web application
+kiln run --file production -- gunicorn app:app
+
+# Background worker
+kiln run --file production -- celery worker -A myapp
+
+# Database migration
+kiln run --file production -- ./manage.py migrate
+```
+
+### Development Workflow
+```bash
+# Start development server
+kiln run --file dev -- npm run dev
+
+# Run tests with test environment
+kiln run --file test -- npm test
+
+# Database setup
+kiln run --file dev -- ./setup-db.sh
+```
+
+### Deployment Scripts
+```bash
+# Deploy application
+kiln run --file production --timeout 10m -- ./deploy.sh
+
+# Health check
+kiln run --file production --timeout 30s -- ./health-check.sh
+
+# Backup operation
+kiln run --file production -- ./backup.sh
+```
+
+### Container Integration
+```bash
+# Docker container with environment
+kiln run --file production -- docker run --rm myapp:latest
+
+# Docker Compose with injected variables
+kiln run --shell -- 'docker-compose up -d'
+
+# Kubernetes job
+kiln run --file production -- kubectl apply -f job.yaml
+```
+
+## Workflow Examples
+
+### Multi-Environment Deployment
+```bash
+#!/bin/bash
+environments=("staging" "production")
+
+for env in "${environments[@]}"; do
+  echo "Deploying to $env..."
+  if kiln run --file "$env" --timeout 5m -- ./deploy.sh; then
+    echo "✓ $env deployment successful"
+  else
+    echo "✗ $env deployment failed"
+    exit 1
+  fi
+done
+```
+
+### Development Server Management
+```bash
+# Start all services
+kiln run --file dev -- docker-compose up -d database redis
+sleep 5
+
+kiln run --file dev -- ./migrate.sh
+kiln run --file dev -- npm run build
+kiln run --file dev -- npm start
+```
+
+### Testing Pipeline
+```bash
+# Unit tests
+kiln run --file test -- npm run test:unit
+
+# Integration tests with database
+kiln run --file test -- npm run test:integration
+
+# End-to-end tests
+kiln run --file test --timeout 10m -- npm run test:e2e
+```
+
+### Backup and Maintenance
+```bash
+# Database backup
+kiln run --file production --timeout 30m -- pg_dump $DATABASE_URL > backup.sql
+
+# Log rotation
+kiln run --file production -- ./rotate-logs.sh
+
+# Certificate renewal
+kiln run --file production -- certbot renew
+```
+
+## Performance Considerations
+
+### Startup Overhead
+- File decryption time (typically \<100ms)
+- Process creation overhead
+- Environment variable injection cost
+
+### Memory Usage
+- Environment variables loaded into process memory
+- No additional memory overhead beyond command requirements
+- Automatic cleanup after command completion
+
+### Concurrent Execution
+```bash
+# Parallel execution with different environments
+kiln run --file staging -- ./task.sh &
+kiln run --file production -- ./task.sh &
+wait
+```
+
+## Best Practices
+
+### Security
+1. **Use specific environment files** for different security contexts
+2. **Avoid shell execution** unless necessary to prevent injection attacks
+3. **Set appropriate timeouts** to prevent resource exhaustion
+4. **Monitor command execution** in production environments
+
+### Reliability
+1. **Handle command failures** appropriately in scripts
+2. **Use timeouts** for long-running operations
+3. **Validate environment** before critical operations
+4. **Log command execution** for debugging
+
+### Development Workflow
+```bash
+# Development script with error handling
+#!/bin/bash
+set -euo pipefail
+
+echo "Starting development environment..."
+
+# Start dependencies
+kiln run --file dev -- docker-compose up -d
+
+# Wait for services
+sleep 10
+
+# Run migrations
+if ! kiln run --file dev --timeout 2m -- ./migrate.sh; then
+  echo "Migration failed"
+  exit 1
+fi
+
+# Start application
+kiln run --file dev -- npm start
+```
+
+## Troubleshooting
+
+### Command Not Executing
+```bash
+# Check if command exists
+which mycommand
+
+# Check working directory
+kiln run --dry-run -- pwd
+
+# Check environment variables
+kiln run --dry-run -- env | grep DATABASE
+```
+
+### Permission Issues
+```bash
+# Check file permissions
+ls -la ./myapp
+
+# Run with explicit path
+kiln run -- /usr/local/bin/myapp
+
+# Check working directory permissions
+kiln run --workdir /tmp -- ./myapp
+```
+
+### Environment Problems
+```bash
+# Verify environment file access
+kiln export --file production >/dev/null
+
+# Check specific variables
+kiln get DATABASE_URL --file production
+
+# Validate configuration
+kiln info --file production --verify
+```
+
+### Signal Handling Issues
+```bash
+# Test signal forwarding
+kiln run -- sleep 60  # Press Ctrl+C to test
+
+# Check process cleanup
+ps aux | grep myapp    # Should show no orphaned processes
+```
+
+## Advanced Usage
+
+### Custom Signal Handling
+```bash
+# Wrapper script for graceful shutdown
+#!/bin/bash
+cleanup() {
+  echo "Cleaning up..."
+  # Custom cleanup logic
+  exit 0
+}
+trap cleanup SIGTERM SIGINT
+
+kiln run --file production -- ./app
+```
+
+### Environment Debugging
+```bash
+# Debug environment setup
+kiln run --shell -- 'env | grep -E "(DATABASE|API|DEBUG)" | sort'
+
+# Check specific variable availability
+kiln run --shell -- 'test -n "$DATABASE_URL" && echo "DB configured" || echo "DB missing"'
+```
+
+### Complex Command Composition
+```bash
+# Pipeline with environment
+kiln run --shell -- 'curl -H "Authorization: Bearer $API_KEY" https://api.example.com/data | jq .'
+
+# Conditional execution
+kiln run --shell -- 'if [ "$DEBUG_MODE" = "true" ]; then echo "Debug enabled"; fi'
+```
