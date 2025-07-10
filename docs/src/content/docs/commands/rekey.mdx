@@ -1,0 +1,364 @@
+---
+title: rekey
+---
+
+import { Aside, LinkButton } from '@astrojs/starlight/components';
+
+Add new recipients and rotate encryption keys for environment files.
+
+## Synopsis
+
+```bash
+kiln rekey --file <file> --add-recipient <name=key> [options]
+```
+
+The `rekey` command safely adds new recipients to encrypted environment files by re-encrypting the file with an updated recipient list, enabling secure team member onboarding and access management.
+
+## Arguments
+
+- `--file`, `-f`: Environment file to rekey (required)
+- `--add-recipient`: Add named recipient in `name=key` format (required, repeatable)
+- `--force`: Skip confirmation prompts
+
+## Examples
+
+### Add Single Recipient
+```bash
+kiln rekey --file production --add-recipient "alice=age1234567890abcdef..."
+```
+
+### Add Multiple Recipients
+```bash
+kiln rekey --file staging \
+  --add-recipient "bob=ssh-ed25519 AAAAC3NzaC1..." \
+  --add-recipient "charlie=age0987654321fedcba..."
+```
+
+### Add from SSH Key File
+```bash
+kiln rekey --file development --add-recipient "dave=~/.ssh/id_ed25519.pub"
+```
+
+### Force Without Confirmation
+```bash
+kiln rekey --file production --add-recipient "admin=age1new...key" --force
+```
+
+## Recipient Format
+
+Recipients must be specified in `name=key` format:
+
+### Age Public Keys
+```bash
+--add-recipient "alice=age1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+```
+
+### SSH Public Keys
+```bash
+--add-recipient "bob=ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbM7..."
+--add-recipient "carol=ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAAB..."
+```
+
+### From Files
+```bash
+--add-recipient "dave=$(cat ~/.ssh/id_ed25519.pub)"
+--add-recipient "eve=./keys/eve.pub"
+```
+
+## Security Model
+
+<Aside type="tip">
+The rekey operation validates new recipient public keys, prevents common mistakes like using private keys, and atomically re-encrypts files for security.
+</Aside>
+
+### Access Control Updates
+The `rekey` operation:
+1. Validates new recipient public keys
+2. Adds recipients to configuration
+3. Updates file access control lists
+4. Re-encrypts file for all authorized recipients
+
+### Recipient Validation
+- Public key format validation (age or SSH)
+- Duplicate recipient detection
+- Private key rejection (common mistake prevention)
+
+### File Re-encryption
+- Decrypts existing environment file
+- Adds new recipients to encryption list
+- Re-encrypts with updated recipient set
+- Atomic file replacement
+
+## Configuration Updates
+
+### Automatic Configuration
+The command automatically updates `kiln.toml`:
+
+**Before:**
+```toml
+[recipients]
+alice = "age1234...existing"
+
+[files.production]
+filename = "prod.env"
+access = ["alice"]
+```
+
+**After:**
+```toml
+[recipients]
+alice = "age1234...existing"
+bob = "ssh-ed25519 AAAAC3..."
+
+[files.production]
+filename = "prod.env"
+access = ["alice", "bob"]
+```
+
+### Access Control Rules
+- New recipients are added to the file's access list
+- Existing access patterns are preserved
+- Wildcard access (`"*"`) includes new recipients automatically
+
+## Error Handling
+
+### Duplicate Recipients
+```bash
+kiln rekey --file prod --add-recipient "alice=age1234...different"
+# Error: configuration error: recipient 'alice' already exists with different key (use different name or remove existing recipient first)
+```
+
+### Invalid Public Key
+```bash
+kiln rekey --file prod --add-recipient "bob=invalid-key"
+# Error: invalid recipient: 'bob=invalid-key': invalid public key format
+```
+
+### Private Key Provided
+```bash
+kiln rekey --file prod --add-recipient "carol=AGE-SECRET-KEY-..."
+# Error: invalid recipient: 'carol=AGE-SECRET-KEY-...': private key provided instead of public key
+```
+
+### Access Denied
+```bash
+kiln rekey --file production --add-recipient "dave=age1234..."
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+```
+
+### File Not Found
+```bash
+kiln rekey --file nonexistent --add-recipient "user=key"
+# Error: configuration error: file 'nonexistent' not configured (check kiln.toml file definitions)
+```
+
+## Workflow Examples
+
+### Team Member Onboarding
+```bash
+# New developer joins the team
+# 1. They generate their key
+ssh-keygen -t ed25519 -f ~/.ssh/kiln_key
+
+# 2. They share their public key
+cat ~/.ssh/kiln_key.pub
+# ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGb... newdev@company.com
+
+# 3. Admin adds them to development environment
+kiln rekey --file development --add-recipient "newdev=ssh-ed25519 AAAAC3..."
+
+# 4. Later, add to staging when ready
+kiln rekey --file staging --add-recipient "newdev=ssh-ed25519 AAAAC3..."
+```
+
+### Production Access Grant
+```bash
+# Senior developer needs production access
+kiln rekey --file production --add-recipient "senior-dev=age1senior...key"
+
+# DevOps engineer for deployments
+kiln rekey --file production --add-recipient "devops=$(cat ./keys/devops.pub)"
+```
+
+### Key Rotation for External Access
+```bash
+# CI/CD system key rotation
+# 1. Generate new CI key
+kiln init key --path ./ci-new.key
+
+# 2. Add new key while keeping old one
+kiln rekey --file production --add-recipient "ci-new=$(cat ./ci-new.key.pub)"
+
+# 3. Update CI system to use new key
+# 4. Remove old key access (requires manual config edit)
+```
+
+### Bulk Team Addition
+```bash
+# Add multiple team members at once
+kiln rekey --file staging \
+  --add-recipient "frontend-dev=ssh-ed25519 AAAAC3..." \
+  --add-recipient "backend-dev=ssh-rsa AAAAB3..." \
+  --add-recipient "qa-engineer=age1qa...key" \
+  --add-recipient "designer=~/.ssh/designer.pub"
+```
+
+## Performance Considerations
+
+### File Size Impact
+- Re-encryption time scales with file size
+- Multiple recipients add minimal overhead
+- Network transfer time for large files
+
+### Concurrent Operations
+- Only one rekey operation per file at a time
+- Other commands may be blocked during re-encryption
+- Consider coordination for shared environments
+
+## Best Practices
+
+- Verify recipient keys before adding
+- Test access after making changes
+- Use descriptive recipient names
+- Start new team members with development access
+
+## Integration with Team Workflows
+
+### GitHub Integration
+```bash
+# Automated team member addition from GitHub
+github_user="newdeveloper"
+github_key=$(curl -s "https://github.com/$github_user.keys" | head -n1)
+kiln rekey --file development --add-recipient "$github_user=$github_key"
+```
+
+### LDAP/AD Integration
+```bash
+# Script to sync team access from directory
+#!/bin/bash
+ldap_users=$(ldapsearch -x -h ldap.company.com -b "ou=developers,dc=company,dc=com" uid | grep "^uid:" | cut -d' ' -f2)
+
+for user in $ldap_users; do
+  if [ -f "./keys/$user.pub" ]; then
+    kiln rekey --file development --add-recipient "$user=$(cat ./keys/$user.pub)"
+  fi
+done
+```
+
+### Automated Access Reviews
+```bash
+# Generate access report
+echo "Current access for production environment:"
+kiln info --file production
+
+echo "Recipients with access:"
+grep -A 10 "\[recipients\]" kiln.toml | grep "=" | cut -d'=' -f1
+```
+
+## Advanced Usage
+
+### Conditional Access Addition
+```bash
+# Add recipient only if not already present
+recipient_name="newuser"
+recipient_key="age1new...key"
+
+if ! grep -q "^$recipient_name = " kiln.toml; then
+  kiln rekey --file production --add-recipient "$recipient_name=$recipient_key"
+  echo "Added $recipient_name to production"
+else
+  echo "$recipient_name already has access"
+fi
+```
+
+### Batch Processing
+```bash
+# Add same recipient to multiple environments
+recipient="consultant=age1consultant...key"
+environments=("development" "staging")
+
+for env in "${environments[@]}"; do
+  kiln rekey --file "$env" --add-recipient "$recipient"
+done
+```
+
+### Access Validation
+```bash
+# Verify new recipient can access after rekeying
+new_recipient="testuser"
+kiln rekey --file development --add-recipient "$new_recipient=age1test...key"
+
+# Test access (requires recipient's private key)
+if kiln get DATABASE_URL --file development --key ./testuser.key >/dev/null 2>&1; then
+  echo "✓ $new_recipient access verified"
+else
+  echo "✗ $new_recipient access failed"
+fi
+```
+
+## Troubleshooting
+
+### Rekey Failures
+```bash
+# Check current configuration
+kiln info --file production
+
+# Verify file exists and is accessible
+ls -la prod.env
+
+# Test current access
+kiln export --file production >/dev/null
+```
+
+### Configuration Issues
+```bash
+# Validate recipient key format
+echo "age1234..." | kiln init config --recipients "test=$(cat)"
+
+# Check for configuration conflicts
+grep "duplicate" kiln.toml
+```
+
+### Access Problems After Rekeying
+```bash
+# Verify new configuration
+kiln info --file production --verify
+
+# Check recipient list
+grep -A 20 "\[recipients\]" kiln.toml
+
+# Test specific recipient access
+kiln get TEST_VAR --file production --key ./recipient.key
+```
+
+## Migration Strategies
+
+### Gradual Access Migration
+```bash
+# Phase 1: Add new recipients alongside existing ones
+kiln rekey --file production --add-recipient "new-admin=age1new..."
+
+# Phase 2: Verify new access works
+# (manual verification step)
+
+# Phase 3: Remove old recipients
+# (requires manual configuration editing)
+```
+
+### Emergency Access Procedures
+```bash
+# Emergency admin access
+emergency_key=$(kiln init key --path /tmp/emergency.key --force)
+kiln rekey --file production --add-recipient "emergency-admin=$(cat /tmp/emergency.key.pub)" --force
+
+# Document emergency access grant
+echo "Emergency access granted at $(date) for incident #12345" >> access.log
+```
+
+## Next Steps
+
+Learn more about team management and security practices:
+
+<LinkButton href="/workflows/adding-members/" variant="primary">Add Team Members</LinkButton>
+<LinkButton href="/workflows/access-management/" variant="secondary">Access Management</LinkButton>
+<LinkButton href="/configuration/access-control/" variant="minimal">Access Control Patterns</LinkButton>

@@ -1,0 +1,197 @@
+---
+title: Quick Start
+description: Get up and running with kiln in 5 minutes. Learn to encrypt secrets, manage team access, and deploy securely.
+---
+
+import { Steps, FileTree, Tabs, TabItem, Aside, LinkButton } from '@astrojs/starlight/components';
+
+This guide walks you through setting up kiln for your project in 5 minutes. You'll encrypt secrets, manage team access, and run applications with decrypted environment variables.
+
+## Prerequisites
+
+- kiln installed on your system
+- A project directory where you want to manage secrets
+- Basic familiarity with environment variables
+
+## Initial Setup
+
+<Steps>
+
+1. **Generate an encryption key**
+
+   ```bash
+   kiln init key
+   ```
+
+   This creates:
+
+   <FileTree>
+
+   - home
+     - user
+       - .kiln
+         - kiln.key # Your private key (keep secret)
+         - kiln.key.pub # Your public key (safe to share)
+
+   </FileTree>
+
+   <Aside type="tip">
+   Want password protection? Use `kiln init key --encrypt`.
+   </Aside>
+
+2. **Create a configuration file**
+
+   ```bash
+   kiln init config --recipients "$(whoami)=$(cat ~/.kiln/kiln.key.pub)"
+   ```
+
+   This creates `kiln.toml` with yourself as the first recipient.
+
+3. **Set your first secret**
+
+   ```bash
+   kiln set DATABASE_URL
+   ```
+
+   kiln prompts you to enter the value securely (input is hidden).
+
+4. **Verify it works**
+
+   ```bash
+   kiln get DATABASE_URL
+   ```
+
+5. **Run your application**
+
+   ```bash
+   kiln run -- your-application
+   ```
+
+   kiln automatically injects all encrypted variables into your application's environment.
+
+</Steps>
+
+## Team Setup
+
+Expand to support a team member:
+
+<Steps>
+
+1. **Teammate generates their key**
+
+   ```bash
+   # Teammate runs on their machine
+   kiln init key --path ./teammate.key
+   ```
+
+2. **Add them to your project**
+
+   ```bash
+   kiln rekey --file default --add-recipient "alice=$(cat ./teammate.key.pub)"
+   ```
+
+3. **Update team configuration**
+
+   Edit `kiln.toml` to organize your team:
+
+   ```toml
+   [recipients]
+   you = "age1..." 
+   alice = "age1..." 
+
+   [groups]
+   developers = ["you", "alice"]
+
+   [files]
+   default = { filename = ".kiln.env", access = ["developers"] }
+   ```
+
+4. **Create environment-specific files**
+
+   ```bash
+   # Staging secrets (all developers)
+   kiln set --file staging API_URL https://staging.api.com
+
+   # Production secrets (you only)
+   kiln set --file production SECRET_KEY super-secret-production-key
+   ```
+
+   Update `kiln.toml`:
+   ```toml
+   [files]
+   default = { filename = ".kiln.env", access = ["developers"] }
+   staging = { filename = "staging.env", access = ["developers"] }
+   production = { filename = "prod.env", access = ["you"] }
+   ```
+
+</Steps>
+
+## Working with Environments
+
+<Tabs>
+<TabItem label="Development">
+
+```bash
+kiln set DEBUG true
+kiln set LOG_LEVEL debug
+kiln run -- npm run dev
+```
+
+</TabItem>
+<TabItem label="Staging">
+
+```bash
+kiln set --file staging API_URL https://staging.api.com
+kiln run --file staging -- ./deploy-staging.sh
+```
+
+</TabItem>
+<TabItem label="Production">
+
+```bash
+kiln set --file production SECRET_KEY production-secret
+kiln run --file production -- ./deploy-production.sh
+```
+
+</TabItem>
+</Tabs>
+
+## Version Control
+
+Your encrypted files are safe to commit:
+
+```bash
+git add kiln.toml .kiln.env staging.env prod.env
+git commit -m "Add encrypted environment configuration"
+git push origin main
+```
+
+<Aside type="caution">
+Never commit your private key (`~/.kiln/kiln.key`). Only commit encrypted files and `kiln.toml`.
+</Aside>
+
+## Common Operations
+
+**Check file status:**
+```bash
+kiln info --verify
+```
+
+**Export for scripts:**
+```bash
+eval $(kiln export)
+kiln export --format json > config.json
+```
+
+**Edit multiple variables:**
+```bash
+kiln edit --file production
+```
+
+## Next Steps
+
+You now have a working kiln setup. Continue with:
+
+<LinkButton href="/configuration/configuration-file/" variant="primary">Advanced Configuration</LinkButton>
+<LinkButton href="/workflows/team-setup/" variant="secondary">Team Workflows</LinkButton>
+<LinkButton href="/commands/overview/" variant="minimal">Explore All Commands</LinkButton>

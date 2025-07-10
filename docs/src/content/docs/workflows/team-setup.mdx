@@ -1,0 +1,174 @@
+---
+title: Team Setup
+description: Initial configuration patterns for multi-user kiln projects with role-based access control.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Essential patterns and examples for setting up kiln in team environments with proper access control and security boundaries.
+
+## Initial Project Setup
+
+### Team Lead Configuration
+
+```bash
+# Generate project key
+kiln init key --path ./keys/admin.key
+
+# Create team configuration
+kiln init config \
+  --recipients "admin=$(cat ./keys/admin.key.pub)" \
+  --recipients "alice=ssh-ed25519 AAAAC3..." \
+  --recipients "bob=age1234...abcd"
+```
+
+### Multi-Environment Structure
+
+```toml
+[recipients]
+admin = "age1admin...key"
+alice = "ssh-ed25519 AAAAC3..."
+bob = "age1bob...key"
+deploy-bot = "ssh-rsa AAAAB3..."
+
+[groups]
+developers = ["alice", "bob"]
+admins = ["admin"]
+automation = ["deploy-bot"]
+
+[files.development]
+filename = "dev.env"
+access = ["*"]
+
+[files.staging]
+filename = "staging.env"
+access = ["developers", "admins"]
+
+[files.production]
+filename = "prod.env"
+access = ["admins", "automation"]
+```
+
+## Environment Initialization
+
+<Aside type="tip">
+Set up environments incrementally, starting with development and adding production restrictions as needed.
+</Aside>
+
+### Development Environment
+
+```bash
+# Accessible to all team members
+kiln set --from-file configs/dev-base.json --file development
+```
+
+```json
+{
+  "NODE_ENV": "development",
+  "DATABASE_URL": "postgresql://localhost:5432/app_dev",
+  "LOG_LEVEL": "debug",
+  "DEBUG": true
+}
+```
+
+### Production Environment
+
+```bash
+# Restricted access with secure values
+kiln set DATABASE_URL --file production
+kiln set JWT_SECRET --file production
+kiln set API_KEY --file production
+```
+
+## Key Distribution
+
+### Secure Key Sharing
+
+```bash
+# Team members generate their own keys
+ssh-keygen -t ed25519 -f ~/.ssh/kiln_key -C "alice@company.com"
+
+# Share public key securely (Slack, email, etc.)
+cat ~/.ssh/kiln_key.pub
+```
+
+### Public Key Collection
+
+```bash
+# Create team keys directory
+mkdir -p keys/team
+
+# Collect public keys
+echo "ssh-ed25519 AAAAC3..." > keys/team/alice.pub
+echo "ssh-ed25519 AAAAC3..." > keys/team/bob.pub
+echo "age1234...abcd" > keys/team/charlie.pub
+```
+
+## Access Verification
+
+### Team Access Test
+
+```bash
+# Verify each member can access appropriate environments
+team_members=("alice" "bob" "charlie")
+environments=("development" "staging" "production")
+
+for member in "${team_members[@]}"; do
+  echo "Testing access for $member:"
+  for env in "${environments[@]}"; do
+    if kiln info --file "$env" --key "keys/$member.key" --verify 2>/dev/null; then
+      echo "  ✓ $env"
+    else
+      echo "  ✗ $env"
+    fi
+  done
+done
+```
+
+## Best Practices
+
+### Security Boundaries
+
+- **Development**: Open access for rapid iteration
+- **Staging**: Developer + admin access for testing
+- **Production**: Admin-only access with automation exceptions
+
+### Key Management
+
+- Personal keys for individual access
+- Service keys for automation (CI/CD, deployments)
+- Emergency admin keys with restricted distribution
+
+### Configuration Management
+
+```bash
+# Version control pattern
+git add kiln.toml *.env keys/*.pub
+git add -N keys/*.key  # Track but never commit private keys
+echo "keys/*.key" >> .gitignore
+```
+
+## Troubleshooting
+
+### Common Setup Issues
+
+**Public key format errors:**
+```bash
+# Verify key format
+ssh-keygen -l -f alice.pub
+age-keygen -y alice.key
+```
+
+**Access verification failures:**
+```bash
+# Check configuration syntax
+kiln info --file development
+kiln info --verify
+```
+
+**Group membership issues:**
+```bash
+# Validate group references
+grep -A 10 "\[groups\]" kiln.toml
+grep -A 10 "\[recipients\]" kiln.toml
+```

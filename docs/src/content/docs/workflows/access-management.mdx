@@ -1,0 +1,277 @@
+---
+title: Access Management
+description: Ongoing management of team access permissions, role changes, and security maintenance.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Strategies for managing team access permissions, role transitions, and security maintenance over time.
+
+## Role-Based Access Patterns
+
+### Standard Role Matrix
+
+| Role | Development | Staging | Production |
+|------|-------------|---------|------------|
+| Junior Dev | ✓ | ✗ | ✗ |
+| Senior Dev | ✓ | ✓ | ✗ |
+| Team Lead | ✓ | ✓ | ✓ |
+| DevOps | ✓ | ✓ | ✓ |
+| CI/CD | ✗ | ✓ | ✓ |
+
+### Implementation
+
+```toml
+[groups]
+junior-devs = ["alice", "bob"]
+senior-devs = ["charlie", "dave"]
+leads = ["admin"]
+devops = ["admin", "ops-lead"]
+automation = ["ci-deploy", "monitoring"]
+
+[files.development]
+access = ["*"]
+
+[files.staging] 
+access = ["senior-devs", "leads", "devops", "automation"]
+
+[files.production]
+access = ["leads", "devops", "automation"]
+```
+
+## Access Auditing
+
+### Regular Access Review
+
+```bash
+# Generate access report
+echo "=== Access Audit Report ===" 
+echo "Date: $(date)"
+echo ""
+
+environments=("development" "staging" "production")
+for env in "${environments[@]}"; do
+  echo "Environment: $env"
+  access_list=$(grep -A 5 "\[files.$env\]" kiln.toml | grep "access" | cut -d'[' -f2 | cut -d']' -f1)
+  echo "  Access: $access_list"
+  echo ""
+done
+```
+
+### Access Matrix Validation
+
+```bash
+# Test access for all team members
+team_keys=("alice.key" "bob.key" "charlie.key" "admin.key")
+environments=("development" "staging" "production")
+
+printf "%-12s" "Member"
+for env in "${environments[@]}"; do
+  printf "%-12s" "$env"
+done
+echo ""
+
+for key in "${team_keys[@]}"; do
+  member=$(basename "$key" .key)
+  printf "%-12s" "$member"
+  
+  for env in "${environments[@]}"; do
+    if kiln info --file "$env" --key "keys/$key" --verify 2>/dev/null; then
+      printf "%-12s" "✓"
+    else
+      printf "%-12s" "✗"
+    fi
+  done
+  echo ""
+done
+```
+
+## Role Transitions
+
+### Promotion Workflow
+
+<Aside type="tip">
+When promoting team members, add access to new environments incrementally and verify each step.
+</Aside>
+
+```bash
+# Junior to Senior Developer
+member="alice"
+kiln rekey --file staging --add-recipient "$member=age1alice...key"
+
+# Update groups in kiln.toml
+# Move alice from junior-devs to senior-devs
+```
+
+## Security Maintenance
+
+### Key Rotation
+
+```bash
+# Rotate service account keys quarterly
+kiln init key --path ./new-ci.key
+
+# Add new key
+kiln rekey --file production --add-recipient "ci-deploy-new=$(cat ./new-ci.key.pub)"
+
+# Update CI/CD system
+# Remove old key from configuration manually
+```
+
+### Emergency Access
+
+```bash
+# Emergency admin access procedure
+kiln init key --path ./emergency.key --force
+
+# Grant immediate access
+kiln rekey --file production --add-recipient "emergency=$(cat ./emergency.key.pub)" --force
+
+# Document in incident log
+echo "$(date): Emergency access granted - incident #$(git rev-parse --short HEAD)" >> access.log
+```
+
+## Access Patterns by Environment
+
+### Development Environment
+
+```bash
+# Open access for collaboration
+# [files.development]
+# access = ["*"]
+
+# All team members can:
+kiln set TEST_VAR "value" --file development
+kiln export --file development --format json
+```
+
+### Staging Environment
+
+```bash
+# Controlled access for testing
+# access = ["senior-devs", "leads", "devops"]
+
+# Limited to experienced developers
+kiln set DATABASE_URL "staging-db-url" --file staging
+kiln run --file staging -- ./run-tests.sh
+```
+
+### Production Environment
+
+```bash
+# Restricted access for operations
+# access = ["leads", "devops", "automation"]
+
+# Admin and automation only
+kiln set API_KEY --file production  # Prompts for secure input
+kiln run --file production -- ./deploy.sh
+```
+
+## Automation Access Control
+
+### CI/CD Pipeline Access
+
+```toml
+[recipients]
+ci-deploy = "age1ci...key"
+ci-test = "age1test...key"
+
+[groups]
+automation = ["ci-deploy", "ci-test"]
+
+[files.staging]
+access = ["developers", "automation"]
+
+[files.production]  
+access = ["admins", "automation"]
+```
+
+### Service Account Management
+
+```bash
+# Monitoring service (read-only pattern)
+kiln rekey --file production --add-recipient "monitoring=age1monitor...key"
+
+# Deployment service (write access needed)
+kiln rekey --file production --add-recipient "deploy=age1deploy...key"
+
+# Backup service (read access for backup)
+kiln rekey --file production --add-recipient "backup=age1backup...key"
+```
+
+## Access Cleanup
+
+### Departing Team Members
+
+<Aside type="caution">
+Remove access immediately when team members leave. This requires re-encrypting all affected files.
+</Aside>
+
+```bash
+# Offboarding checklist
+departing_member="bob"
+
+# 1. Export current configurations
+for env in development staging production; do
+  if kiln info --file "$env" --verify 2>/dev/null; then
+    kiln export --file "$env" --format json > "backup-${env}.json"
+  fi
+done
+
+# 2. Remove from kiln.toml recipients and groups
+# 3. Re-import configurations (excludes departed member)
+for env in development staging production; do
+  if [ -f "backup-${env}.json" ]; then
+    kiln set --from-file "backup-${env}.json" --file "$env"
+  fi
+done
+```
+
+### Periodic Access Cleanup
+
+```bash
+# Quarterly access review script
+#!/bin/bash
+
+echo "Quarterly Access Review - $(date)"
+echo "================================="
+
+# List all recipients
+echo "Current Recipients:"
+grep -A 20 "\[recipients\]" kiln.toml | grep "=" | cut -d'=' -f1
+
+# Check for unused keys
+echo ""
+echo "Checking for unused access..."
+for env in development staging production; do
+  echo "Environment: $env"
+  # Manual verification needed
+done
+
+# Prompt for access changes
+echo ""
+echo "Review complete. Update access as needed."
+```
+
+## Best Practices
+
+### Access Control Principles
+
+- **Least Privilege**: Grant minimum necessary access
+- **Progressive Access**: Start with development, earn staging/production
+- **Time-Limited**: Review and rotate access regularly
+- **Audit Trail**: Document all access changes
+
+### Operational Security
+
+```bash
+# Regular security tasks
+# 1. Monthly access review
+# 2. Quarterly key rotation
+# 3. Annual access policy review
+# 4. Incident-based access audit
+
+# Monitor access patterns
+echo "Recent environment access:" 
+kiln info --verify | grep -E "(can|cannot) decrypt"
+```

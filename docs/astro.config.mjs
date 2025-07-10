@@ -10,28 +10,71 @@ export default defineConfig({
       starlight({
           title: 'kiln',
           logo: {
-              src: './src/assets/logo.svg',
+              light: './src/assets/logo.svg',
+              dark: './src/assets/logo-dark.svg',
               replacesTitle: true,
           },
           social: [{ icon: 'github', label: 'GitHub', href: 'https://github.com/thunderbottom/kiln' }],
           sidebar: [
               {
-                  label: 'Guides',
+                  label: 'Getting Started',
                   items: [
-                      // Each item here is one entry in the navigation menu.
-                      { label: 'Example Guide', slug: 'guides/example' },
+                      { label: 'Introduction', slug: 'introduction' },
+                      { label: 'Installation', slug: 'installation' },
+                      { label: 'Quick Start', slug: 'quick-start' },
+                      { label: 'Basic Concepts', slug: 'basic-concepts' },
+                  ],
+              },
+              {
+                  label: 'Configuration',
+                  items: [
+                      { label: 'Configuration File', slug: 'configuration/configuration-file' },
+                      { label: 'Recipients and Groups', slug: 'configuration/recipients' },
+                      { label: 'File Access Control', slug: 'configuration/access-control' },
+                      { label: 'Environment Variables', slug: 'configuration/environment-variables' },
+                  ],
+              },
+              {
+                  label: 'Commands',
+                  items: [
+                      { label: 'Overview', slug: 'commands/overview' },
+                      { label: 'init', slug: 'commands/init' },
+                      { label: 'set', slug: 'commands/set' },
+                      { label: 'get', slug: 'commands/get' },
+                      { label: 'edit', slug: 'commands/edit' },
+                      { label: 'export', slug: 'commands/export' },
+                      { label: 'run', slug: 'commands/run' },
+                      { label: 'rekey', slug: 'commands/rekey' },
+                      { label: 'info', slug: 'commands/info' },
+                  ],
+              },
+              {
+                  label: 'Example Workflows',
+                  items: [
+                      { label: 'Team Setup', slug: 'workflows/team-setup' },
+                      { label: 'Adding Members', slug: 'workflows/adding-members' },
+                      { label: 'Access Management', slug: 'workflows/access-management' },
                   ],
               },
               {
                   label: 'Reference',
-                  autogenerate: { directory: 'reference' },
+                  items: [
+                      { label: 'Configuration Schema', slug: 'reference/configuration' },
+                      { label: 'Command Reference', slug: 'reference/commands' },
+                      { label: 'Environment Variables', slug: 'reference/env-vars' },
+                      { label: 'File Formats', slug: 'reference/formats' },
+                      { label: 'Exit Codes', slug: 'reference/exit-codes' },
+                  ],
               },
+              { label: 'FAQs', slug: 'faq' },
           ],
           customCss: [
             "./src/styles/global.css",  
           ],
       }),
 	],
+
+	site: "http://localhost:4321",
 
   vite: {
     plugins: [tailwindcss()],

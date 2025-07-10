@@ -1,0 +1,305 @@
+---
+title: edit
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Interactive editing of encrypted environment variables using your preferred editor.
+
+## Synopsis
+
+```bash
+kiln edit [options]
+```
+
+The `edit` command provides a secure, interactive way to modify multiple environment variables by temporarily decrypting the file into a secure temporary location for editing.
+
+## Options
+
+- `--file`, `-f`: Environment file to edit (default: `default`)
+- `--editor`: Editor to use (overrides `EDITOR` environment variable)
+
+## Examples
+
+### Basic Editing
+```bash
+kiln edit
+# Opens default environment file in $EDITOR
+```
+
+### Specific Environment File
+```bash
+kiln edit --file production
+kiln edit --file staging
+```
+
+### Custom Editor
+```bash
+kiln edit --editor vim
+kiln edit --editor "code --wait"
+```
+
+## Editor Configuration
+
+### Environment Variable
+The command uses the `EDITOR` environment variable by default:
+```bash
+export EDITOR=vim
+kiln edit
+
+# Or
+export EDITOR="code --wait"
+kiln edit
+```
+
+### Supported Editors
+- **vim/nvim**: `export EDITOR=vim`
+- **emacs**: `export EDITOR=emacs`
+- **nano**: `export EDITOR=nano`
+- **VS Code**: `export EDITOR="code --wait"`
+- **Sublime**: `export EDITOR="subl --wait"`
+
+The `--wait` flag is important for GUI editors to ensure kiln waits for the editor to close before processing changes.
+
+## File Format
+
+The temporary file uses standard environment variable format:
+```bash
+# Environment Variables
+# Format: KEY=value
+
+DATABASE_URL=postgresql://localhost:5432/myapp
+API_KEY=sk-1234567890abcdef
+DEBUG_MODE=true
+LOG_LEVEL=info
+
+# Comments are preserved
+REDIS_URL=redis://localhost:6379
+```
+
+### Format Rules
+- One variable per line: `KEY=value`
+- Comments start with `#`
+- Empty lines are ignored
+- No quotes needed unless value contains special characters
+- Multiline values not supported (use `\n` for newlines)
+
+## Security Features
+
+<Aside type="caution">
+The edit command creates temporary files in secure locations with restricted permissions. Files are automatically cleaned up on completion or interruption.
+</Aside>
+
+### Temporary File Handling
+- Creates temporary file in secure location (`/dev/shm` on Linux if available)
+- File permissions set to 0600 (owner read/write only)
+- Automatic cleanup on completion or interruption
+- Memory-backed filesystem for additional security
+
+### Signal Handling
+The command handles interruption gracefully:
+- `Ctrl+C` during editing safely removes temporary file
+- `SIGTERM` triggers secure cleanup
+- Editor process termination is monitored
+
+### Memory Safety
+- Decrypted content is wiped from memory after editing
+- Temporary file is securely deleted
+- No sensitive data persists after command completion
+
+## Change Detection
+
+### Modification Tracking
+- Compares file modification time before and after editing
+- Only saves changes if the file was actually modified
+- Preserves original file if no changes are made
+
+### Validation
+Before saving changes, the command validates:
+- Environment variable name format
+- File syntax and parsing
+- Access permissions for the target file
+
+## Error Handling
+
+### Editor Not Found
+```bash
+kiln edit
+# Error: configuration error: no editor specified (set EDITOR environment variable or use --editor flag)
+```
+
+### Invalid Editor
+```bash
+kiln edit --editor nonexistent
+# Error: configuration error: editor 'nonexistent' not found in PATH (check editor installation and PATH)
+```
+
+### Syntax Errors
+```bash
+# If you save invalid syntax in the editor:
+# Error: invalid environment file format: line 5: invalid format
+```
+
+### Access Denied
+```bash
+kiln edit --file production
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+```
+
+## Workflow Examples
+
+### Development Configuration
+```bash
+kiln edit --file development
+# Opens editor with development variables
+# Add: DATABASE_URL=postgresql://localhost:5432/myapp_dev
+# Add: DEBUG_MODE=true
+# Add: LOG_LEVEL=debug
+```
+
+### Production Setup
+```bash
+kiln edit --file production
+# Opens editor for production variables
+# Add: DATABASE_URL=postgresql://prod-server/myapp
+# Add: JWT_SECRET=very-secure-secret
+# Add: DEBUG_MODE=false
+```
+
+### Bulk Updates
+```bash
+kiln edit --file staging
+# Efficient way to update multiple related variables:
+# - Update API endpoints
+# - Rotate multiple secrets
+# - Adjust configuration parameters
+```
+
+## Editor Integration
+
+### VS Code Configuration
+```bash
+# Set up VS Code for kiln editing
+export EDITOR="code --wait"
+
+# Or add to your shell profile:
+echo 'export EDITOR="code --wait"' >> ~/.bashrc
+```
+
+### Vim Configuration
+```bash
+# Vim is synchronous by default
+export EDITOR=vim
+
+# Or for neovim:
+export EDITOR=nvim
+```
+
+### Custom Editor Scripts
+```bash
+# Create wrapper script for complex editor setups
+cat > ~/.local/bin/kiln-editor << 'EOF'
+#!/bin/bash
+# Custom editor for kiln with syntax highlighting
+vim -c 'set ft=sh' "$1"
+EOF
+
+chmod +x ~/.local/bin/kiln-editor
+export EDITOR=kiln-editor
+```
+
+## Performance Considerations
+
+### Large Environment Files
+- Decryption time scales with file size
+- Editor loading time depends on variable count
+- Memory usage proportional to total content size
+
+### Frequent Editing
+For repeated edits:
+- Consider using `set` for single variable updates
+- Use `edit` for bulk changes and initial setup
+- Remember that each edit re-encrypts the entire file
+
+## Best Practices
+
+### Security
+1. **Use secure editors** that don't create backup files in insecure locations
+2. **Clear editor history** if it might contain sensitive values
+3. **Monitor temporary file location** to ensure secure storage
+4. **Verify access control** before editing sensitive environments
+
+### Workflow
+1. **Backup before major changes** using `export` command
+2. **Validate syntax** carefully before saving
+3. **Use comments** to document variable purposes
+4. **Group related variables** logically in the file
+
+### Editor Setup
+1. **Configure editor wait behavior** for GUI editors
+2. **Disable auto-save** to prevent premature saves
+3. **Set up syntax highlighting** for environment files
+4. **Configure secure temporary directories** if needed
+
+## Troubleshooting
+
+### Editor Doesn't Wait
+```bash
+# Problem: Editor opens and kiln immediately processes empty file
+# Solution: Add --wait flag for GUI editors
+export EDITOR="code --wait"
+```
+
+### Permission Issues
+```bash
+# Problem: Cannot create temporary file
+# Solution: Check /tmp permissions or specify different TMPDIR
+export TMPDIR=~/.cache/kiln
+```
+
+### Syntax Errors
+```bash
+# Problem: Invalid format after editing
+# Solution: Check for missing = signs, invalid characters in names
+# Valid:   API_KEY=value
+# Invalid: api-key=value (hyphens not allowed)
+```
+
+### Signal Handling
+```bash
+# If editor process becomes detached:
+# 1. Find editor process: ps aux | grep editor
+# 2. Kill gracefully: kill -TERM <pid>
+# 3. Clean up manually if needed: rm /tmp/kiln-edit-*
+```
+
+## Integration with Development Workflow
+
+### Pre-commit Hooks
+```bash
+# Validate environment files before commits
+#!/bin/bash
+for env_file in .env.*; do
+  if ! kiln edit --file "${env_file%.env}" --editor "true"; then
+    echo "Invalid environment file: $env_file"
+    exit 1
+  fi
+done
+```
+
+### IDE Integration
+```bash
+# VS Code task for editing environment
+# .vscode/tasks.json
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "Edit Environment",
+      "type": "shell",
+      "command": "kiln edit --file ${input:environmentFile}",
+      "group": "build"
+    }
+  ]
+}
+```

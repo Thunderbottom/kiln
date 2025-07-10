@@ -1,0 +1,483 @@
+---
+title: Exit Codes
+description: Complete reference for kiln exit codes with error categories and troubleshooting guidance.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Comprehensive reference for all exit codes returned by kiln commands with categorized error types and resolution guidance.
+
+## Standard Exit Codes
+
+| Code | Status | Description |
+|------|--------|-------------|
+| `0` | Success | Command completed successfully |
+| `1` | General Error | Configuration, validation, or access errors |
+| `N` | Command Exit Code | Target command's exit code (run command only) |
+
+## Success (Exit Code 0)
+
+All operations completed successfully without errors or warnings.
+
+**Examples:**
+```bash
+kiln get DATABASE_URL
+echo $?  # 0
+
+kiln set API_KEY "new-value"
+echo $?  # 0
+
+kiln run -- echo "Hello"
+echo $?  # 0
+```
+
+## General Errors (Exit Code 1)
+
+### Configuration Errors
+
+**Missing configuration file:**
+```bash
+kiln get VAR
+# Error: configuration file 'kiln.toml' not found (use 'kiln init config' to create)
+# Exit code: 1
+```
+
+**Invalid TOML syntax:**
+```bash
+kiln get VAR
+# Error: load configuration from 'kiln.toml': invalid TOML syntax at line 5
+# Exit code: 1
+```
+
+**Invalid recipient references:**
+```bash
+kiln get VAR
+# Error: invalid configuration: group 'developers' references unknown recipient 'unknown-user'
+# Exit code: 1
+```
+
+### Access Control Errors
+
+<Aside type="caution">
+Access control violations always return exit code 1 to clearly distinguish authorization failures from other error types.
+</Aside>
+
+**File access denied:**
+```bash
+kiln get SECRET --file production
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+# Exit code: 1
+```
+
+**Key loading failures:**
+```bash
+kiln get VAR
+# Error: cannot load identity from '~/.kiln/kiln.key': no such file or directory
+# Exit code: 1
+```
+
+**Decryption failures:**
+```bash
+kiln get VAR --file staging
+# Error: security error: cannot decrypt 'staging' (ensure your key has access to this file)
+# Exit code: 1
+```
+
+### Validation Errors
+
+**Invalid variable names:**
+```bash
+kiln set invalid-name value
+# Error: invalid variable name: must start with letter or underscore, followed by letters, numbers, or underscores
+# Exit code: 1
+```
+
+**Invalid file names:**
+```bash
+kiln get VAR --file ../invalid
+# Error: invalid file name: cannot contain '..' or '/' characters
+# Exit code: 1
+```
+
+**Variable not found:**
+```bash
+kiln get NONEXISTENT
+# Error: variable 'NONEXISTENT' not found in 'default'
+# Exit code: 1
+```
+
+### File System Errors
+
+**File not configured:**
+```bash
+kiln get VAR --file undefined
+# Error: configuration error: file 'undefined' not configured (check kiln.toml file definitions)
+# Exit code: 1
+```
+
+**Permission denied:**
+```bash
+kiln edit --file readonly
+# Error: write file 'readonly.env': permission denied
+# Exit code: 1
+```
+
+## Command Exit Code Propagation (run command)
+
+<Aside type="note">
+The `run` command propagates the exact exit code of the executed command. This allows for proper integration with scripts and CI/CD pipelines that depend on specific exit codes.
+</Aside>
+
+### Command Success
+```bash
+kiln run -- echo "Hello"
+echo $?  # 0 (echo command succeeded)
+```
+
+### Command Failure
+```bash
+kiln run -- false
+echo $?  # 1 (false command returns 1)
+```
+
+### Custom Exit Codes
+```bash
+kiln run -- exit 42
+echo $?  # 42 (custom exit code preserved)
+```
+
+### Command Not Found
+```bash
+kiln run -- nonexistent-command
+# Error: command failed: exec: "nonexistent-command": executable file not found in $PATH
+# Exit code: 1 (kiln error, not command exit code)
+```
+
+### Signal Termination
+```bash
+kiln run -- some-command
+# (Ctrl+C pressed)
+# Exit code: 130 (standard signal termination code)
+```
+
+### Command Timeout
+```bash
+kiln run --timeout 5s -- sleep 10
+# Error: command failed: context deadline exceeded
+# Exit code: 1 (kiln timeout error)
+```
+
+## Error Categories by Command
+
+### init Command
+
+**Key generation errors:**
+```bash
+kiln init key --path /readonly/path
+# Error: save private key: open /readonly/path: permission denied
+# Exit code: 1
+```
+
+**Configuration creation errors:**
+```bash
+kiln init config --recipients "invalid=badkey"
+# Error: invalid recipient: 'invalid=badkey': invalid public key format
+# Exit code: 1
+```
+
+### set Command
+
+**Validation failures:**
+```bash
+kiln set "" value
+# Error: invalid variable name: name is required
+# Exit code: 1
+```
+
+**Value validation:**
+```bash
+kiln set VAR "$(printf 'invalid\x00value')"
+# Error: invalid variable value: null byte at position 7
+# Exit code: 1
+```
+
+**JSON file validation:**
+```bash
+kiln set --from-file invalid.json
+# Error: invalid JSON in file 'invalid.json': unexpected character ',' at position 15
+# Exit code: 1
+```
+
+**Argument conflicts:**
+```bash
+kiln set DATABASE_URL --from-file config.json
+# Error: cannot use both --from-file and variable name argument
+# Exit code: 1
+```
+
+### get Command
+
+**Variable retrieval failures:**
+```bash
+kiln get MISSING_VAR
+# Error: variable 'MISSING_VAR' not found in 'default'
+# Exit code: 1
+```
+
+### edit Command
+
+**Editor failures:**
+```bash
+kiln edit
+# Error: configuration error: no editor specified (set EDITOR environment variable or use --editor flag)
+# Exit code: 1
+```
+
+**File format errors:**
+```bash
+# After editing with invalid syntax
+kiln edit
+# Error: invalid environment file format: line 5: invalid format
+# Exit code: 1
+```
+
+### export Command
+
+**Output formatting errors:**
+```bash
+kiln export --format invalid
+# Error: invalid format: must be one of: shell, json, yaml
+# Exit code: 1
+```
+
+### run Command
+
+**Environment loading errors:**
+```bash
+kiln run --file broken -- echo "test"
+# Error: security error: cannot decrypt 'broken' (ensure your key has access to this file)
+# Exit code: 1
+```
+
+**Command execution with exit code propagation:**
+```bash
+kiln run -- exit 42
+# (no error message)
+# Exit code: 42 (command's exit code)
+```
+
+**Command not found:**
+```bash
+kiln run -- nonexistent-command
+# Error: command failed: exec: "nonexistent-command": executable file not found in $PATH
+# Exit code: 1 (kiln error)
+```
+
+### rekey Command
+
+**Recipient validation:**
+```bash
+kiln rekey --file prod --add-recipient "user=invalid-key"
+# Error: invalid recipient: 'user=invalid-key': invalid public key format
+# Exit code: 1
+```
+
+**Duplicate recipients:**
+```bash
+kiln rekey --file prod --add-recipient "existing=different-key"
+# Error: configuration error: recipient 'existing' already exists with different key
+# Exit code: 1
+```
+
+### info Command
+
+**File access issues:**
+```bash
+kiln info --file missing
+# Error: configuration error: file 'missing' not configured (check kiln.toml file definitions)
+# Exit code: 1
+```
+
+## Scripting Integration
+
+### Error Handling Patterns
+
+<Aside type="tip">
+Use exit codes to implement robust error handling in scripts. Different exit codes allow for specific error responses.
+</Aside>
+
+**Basic error checking:**
+```bash
+if ! kiln get DATABASE_URL >/dev/null 2>&1; then
+  echo "Failed to retrieve DATABASE_URL" >&2
+  exit 1
+fi
+```
+
+**Specific error handling:**
+```bash
+#!/bin/bash
+kiln run --file production -- ./deploy.sh
+exit_code=$?
+
+case $exit_code in
+  0)
+    echo "Deployment successful"
+    ;;
+  1)
+    # Could be kiln error OR command returned 1
+    # Check if it's a kiln error vs command failure
+    if kiln info --file production --verify >/dev/null 2>&1; then
+      echo "Deployment script failed with exit code 1" >&2
+    else
+      echo "Environment access error - check kiln configuration" >&2
+    fi
+    exit 1
+    ;;
+  2)
+    echo "Deployment script failed with exit code 2" >&2
+    exit 2
+    ;;
+  *)
+    echo "Deployment script failed with exit code $exit_code" >&2
+    exit $exit_code
+    ;;
+esac
+```
+
+### CI/CD Integration
+
+**Fail fast on configuration errors:**
+```bash
+# Validate environment access before deployment
+if ! kiln info --file production --verify; then
+  echo "Cannot access production environment" >&2
+  exit 1
+fi
+
+# Deploy with proper exit code propagation
+kiln run --file production -- ./deploy.sh
+deployment_exit=$?
+
+# Handle specific deployment exit codes
+case $deployment_exit in
+  0)
+    echo "Deployment successful"
+    ;;
+  1)
+    echo "Deployment failed - check logs" >&2
+    exit 1
+    ;;
+  42)
+    echo "Deployment rollback required" >&2
+    ./rollback.sh
+    exit 42
+    ;;
+  *)
+    echo "Deployment failed with unexpected exit code: $deployment_exit" >&2
+    exit $deployment_exit
+    ;;
+esac
+```
+
+**Conditional execution:**
+```bash
+# Only proceed if environment is accessible
+if kiln get API_KEY --file staging >/dev/null 2>&1; then
+  echo "Running staging tests..."
+  kiln run --file staging -- npm test
+else
+  echo "Skipping staging tests - no access to staging environment"
+fi
+```
+
+## Troubleshooting by Exit Code
+
+### Exit Code 1 Troubleshooting
+
+**Check configuration:**
+```bash
+# Verify configuration file exists and is valid
+ls -la kiln.toml
+kiln info >/dev/null 2>&1 && echo "Config OK" || echo "Config invalid"
+```
+
+**Check key access:**
+```bash
+# Verify private key is accessible
+ls -la ~/.kiln/kiln.key
+kiln info --verify
+```
+
+**Check file permissions:**
+```bash
+# Verify environment file permissions
+ls -la *.env
+```
+
+### Command Exit Code Troubleshooting (run command)
+
+**For run command with unexpected exit codes:**
+```bash
+# Test command execution outside kiln first
+./my-command --help
+echo $?  # Check what exit code the command normally returns
+
+# Check command availability
+which my-command
+
+# Test with simpler command
+kiln run --file production -- echo "test"
+echo $?  # Should be 0 if environment access works
+
+# Test specific exit code handling
+kiln run --file production -- exit 5
+echo $?  # Should be 5
+```
+
+## Monitoring and Alerting
+
+### Exit Code Monitoring
+
+**Success rate tracking:**
+```bash
+# Count successful operations
+success_count=0
+total_count=0
+
+for env in dev staging production; do
+  total_count=$((total_count + 1))
+  if kiln info --file "$env" --verify >/dev/null 2>&1; then
+    success_count=$((success_count + 1))
+  fi
+done
+
+success_rate=$((success_count * 100 / total_count))
+echo "Environment access success rate: ${success_rate}%"
+```
+
+**Alert on specific errors:**
+```bash
+# Alert on access control failures
+if ! kiln info --file production --verify 2>/dev/null; then
+  alert "Production environment access failed"
+fi
+```
+
+### Log Integration
+
+**Structured logging:**
+```bash
+#!/bin/bash
+log_exit_code() {
+  local command="$1"
+  local exit_code="$2"
+  local timestamp=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
+  
+  echo "{\"timestamp\":\"$timestamp\",\"command\":\"$command\",\"exit_code\":$exit_code}" >> kiln.log
+}
+
+kiln get DATABASE_URL --file production
+exit_code=$?
+log_exit_code "get DATABASE_URL" $exit_code
+```

@@ -1,0 +1,410 @@
+---
+title: info
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Display file status, verification details, and project information.
+
+## Synopsis
+
+```bash
+kiln info [options]
+```
+
+The `info` command provides diagnostic information about environment files, including file sizes, modification times, encryption status, and access verification.
+
+## Options
+
+- `--file`, `-f`: Show info for specific file (default: all configured files)
+- `--verify`: Test decryption capability with current key
+
+## Examples
+
+### All Files Overview
+```bash
+kiln info
+# default (.kiln.env): 2.34 KB, modified 2024-01-15 14:30:25
+# staging (staging.env): 1.87 KB, modified 2024-01-15 12:15:10
+# production (prod.env): 3.21 KB, modified 2024-01-14 16:45:30
+```
+
+### Specific File Information
+```bash
+kiln info --file production
+# production (prod.env): 3.21 KB, modified 2024-01-14 16:45:30
+```
+
+### With Verification
+```bash
+kiln info --verify
+# default (.kiln.env): 2.34 KB, modified 2024-01-15 14:30:25 (can decrypt)
+# staging (staging.env): 1.87 KB, modified 2024-01-15 12:15:10 (can decrypt)
+# production (prod.env): 3.21 KB, modified 2024-01-14 16:45:30 (cannot decrypt)
+```
+
+### Specific File with Verification
+```bash
+kiln info --file development --verify
+# development (dev.env): 1.45 KB, modified 2024-01-15 15:20:45 (can decrypt)
+```
+
+## Output Information
+
+### File Status Display
+Each file entry shows:
+- **File name**: Logical name from configuration
+- **Physical path**: Actual file location on disk
+- **File size**: Size in KB with two decimal precision
+- **Modification time**: Last modified timestamp in local time
+- **Verification status**: Decryption capability (when `--verify` is used)
+
+### File States
+
+**File exists and accessible:**
+```bash
+production (prod.env): 3.21 KB, modified 2024-01-14 16:45:30
+```
+
+**File not found:**
+```bash
+staging (staging.env): file not found (will be created on first use)
+```
+
+**File exists but cannot decrypt:**
+```bash
+production (prod.env): 3.21 KB, modified 2024-01-14 16:45:30 (cannot decrypt)
+```
+
+**File exists and can decrypt:**
+```bash
+development (dev.env): 1.45 KB, modified 2024-01-15 15:20:45 (can decrypt)
+```
+
+## Verification Process
+
+### Access Testing
+When `--verify` is enabled, the command:
+1. Attempts to decrypt each environment file
+2. Validates file format and parsing
+3. Reports success or failure for each file
+4. Does not display actual variable content
+
+### Error Conditions
+- **Cannot decrypt**: Current key lacks access to the file
+- **Cannot load key**: Private key file issues
+- **File corruption**: Encrypted file is damaged or invalid format
+- **Configuration error**: File not properly configured
+
+## Use Cases
+
+### Project Health Check
+```bash
+# Quick overview of all environment files
+kiln info
+# Verify all files are accessible
+kiln info --verify
+```
+
+### Troubleshooting Access Issues
+```bash
+# Check specific problematic file
+kiln info --file production --verify
+
+# Compare accessible vs inaccessible files
+kiln info --verify | grep "cannot decrypt"
+```
+
+### File Management
+```bash
+# Check file sizes before operations
+kiln info | grep -E "\d+\.\d+ KB"
+
+# Find recently modified files
+kiln info | sort -k5,6
+```
+
+### Team Onboarding Verification
+```bash
+# New team member checks their access
+kiln info --verify
+
+# Verify access to specific environments
+kiln info --file staging --verify
+kiln info --file production --verify
+```
+
+## Error Handling
+
+### No Configuration File
+```bash
+kiln info
+# Error: configuration file 'kiln.toml' not found (use 'kiln init config' to create)
+```
+
+### Invalid File Configuration
+```bash
+kiln info --file nonexistent
+# Error: configuration error: file 'nonexistent' not configured (check kiln.toml file definitions)
+```
+
+### Key Loading Issues
+```bash
+kiln info --verify
+# Error: cannot load identity from '~/.kiln/kiln.key': no such file or directory
+```
+
+### Permission Problems
+```bash
+kiln info --file restricted
+# restricted (restricted.env): 1.23 KB, modified 2024-01-15 10:00:00 (cannot decrypt)
+```
+
+## Integration Patterns
+
+### Health Check Scripts
+```bash
+#!/bin/bash
+# Validate environment access before deployment
+
+required_envs=("staging" "production")
+failed=0
+
+for env in "${required_envs[@]}"; do
+  if kiln info --file "$env" --verify 2>/dev/null | grep -q "can decrypt"; then
+    echo "✓ $env access verified"
+  else
+    echo "✗ $env access failed"
+    failed=1
+  fi
+done
+
+if [ $failed -eq 1 ]; then
+  echo "Environment access validation failed"
+  exit 1
+fi
+```
+
+### Monitoring Integration
+```bash
+# Generate metrics for monitoring system
+kiln info --verify | while read line; do
+  file=$(echo "$line" | cut -d'(' -f1 | tr -d ' ')
+  if echo "$line" | grep -q "can decrypt"; then
+    echo "kiln_file_accessible{file=\"$file\"} 1"
+  else
+    echo "kiln_file_accessible{file=\"$file\"} 0"
+  fi
+done
+```
+
+### CI/CD Pipeline Validation
+```bash
+# Validate access in CI pipeline
+if ! kiln info --file production --verify >/dev/null 2>&1; then
+  echo "ERROR: Cannot access production environment"
+  echo "Check CI key configuration and access permissions"
+  exit 1
+fi
+```
+
+### Documentation Generation
+```bash
+# Generate environment documentation
+echo "# Environment Files Status"
+echo "Generated on: $(date)"
+echo ""
+kiln info --verify | while read line; do
+  echo "- $line"
+done
+```
+
+## Workflow Examples
+
+### Daily Operations Check
+```bash
+# Morning environment health check
+echo "Daily environment status check:"
+kiln info --verify
+
+# Check for any issues
+if kiln info --verify | grep -q "cannot decrypt"; then
+  echo "⚠️  Access issues detected - check key configuration"
+fi
+```
+
+### Pre-Deployment Validation
+```bash
+# Validate access before deployment
+deployment_env="production"
+
+echo "Validating $deployment_env environment..."
+if kiln info --file "$deployment_env" --verify | grep -q "can decrypt"; then
+  echo "✓ $deployment_env access confirmed"
+  # Proceed with deployment
+else
+  echo "✗ Cannot access $deployment_env environment"
+  echo "Check key configuration and access permissions"
+  exit 1
+fi
+```
+
+### Team Access Audit
+```bash
+# Check which environments each team member can access
+team_keys=("alice.key" "bob.key" "charlie.key")
+environments=("development" "staging" "production")
+
+echo "Team Access Matrix:"
+printf "%-12s" "Member"
+for env in "${environments[@]}"; do
+  printf "%-12s" "$env"
+done
+echo ""
+
+for key in "${team_keys[@]}"; do
+  member=$(basename "$key" .key)
+  printf "%-12s" "$member"
+  
+  for env in "${environments[@]}"; do
+    if kiln info --file "$env" --verify --key "./keys/$key" 2>/dev/null | grep -q "can decrypt"; then
+      printf "%-12s" "✓"
+    else
+      printf "%-12s" "✗"
+    fi
+  done
+  echo ""
+done
+```
+
+### File Size Monitoring
+```bash
+# Monitor environment file sizes
+echo "Environment file sizes:"
+kiln info | grep -E "\d+\.\d+ KB" | while read line; do
+  size=$(echo "$line" | grep -o '[0-9]\+\.[0-9]\+ KB')
+  file=$(echo "$line" | cut -d'(' -f1 | tr -d ' ')
+  
+  # Alert if file is unusually large (>10KB)
+  if [ "$(echo "$size" | cut -d'.' -f1)" -gt 10 ]; then
+    echo "⚠️  Large file detected: $file ($size)"
+  else
+    echo "✓ $file: $size"
+  fi
+done
+```
+
+## Troubleshooting Guide
+
+### Common Issues
+
+**All files show "cannot decrypt":**
+```bash
+# Check key file exists and is readable
+ls -la ~/.kiln/kiln.key
+kiln info --key ~/.kiln/kiln.key --verify
+
+# Verify key format
+head -n1 ~/.kiln/kiln.key
+```
+
+**Specific file shows "cannot decrypt":**
+```bash
+# Check file access configuration
+grep -A5 "\[files\.$filename\]" kiln.toml
+
+# Verify you're in the allowed recipients list
+grep -A10 "\[recipients\]" kiln.toml
+```
+
+**File shows "file not found":**
+```bash
+# Check file path configuration
+grep "filename.*=" kiln.toml
+
+# Create file if needed
+kiln set INITIAL_VAR "value" --file "$filename"
+```
+
+### Diagnostic Steps
+
+1. **Check configuration:**
+   ```bash
+   cat kiln.toml | grep -E "(recipients|files)"
+   ```
+
+2. **Verify key access:**
+   ```bash
+   kiln info --verify 2>&1 | grep -E "(error|cannot)"
+   ```
+
+3. **Test specific operations:**
+   ```bash
+   kiln export --file "$filename" >/dev/null
+   ```
+
+4. **Check file permissions:**
+   ```bash
+   ls -la *.env
+   ```
+
+## Performance Considerations
+
+### File Scanning
+- `info` command scans all configured files by default
+- Verification adds decryption overhead for each file
+- Large files take longer to verify
+
+### Optimization Strategies
+- Use `--file` to check specific files when troubleshooting
+- Avoid `--verify` in automated scripts unless necessary
+- Cache verification results for monitoring systems
+
+## Best Practices
+
+### Regular Monitoring
+1. **Include in daily routines** to catch access issues early
+2. **Monitor file sizes** to detect configuration bloat
+3. **Verify access** after key rotations or team changes
+4. **Document access patterns** for audit purposes
+
+### Automation Integration
+1. **Add to CI/CD pipelines** for deployment validation
+2. **Include in monitoring scripts** for operational awareness
+3. **Use in backup procedures** to verify file integrity
+4. **Integrate with alerting systems** for access failures
+
+### Security Practices
+1. **Regular access verification** ensures key validity
+2. **Monitor unauthorized access attempts** through failed verifications
+3. **Track file modification patterns** for security auditing
+4. **Validate team access** after organizational changes
+
+## Advanced Usage
+
+### Custom Formatting
+```bash
+# JSON output for programmatic use
+kiln info --verify | sed 's/: /":"/g' | sed 's/ (/","path":"/g' | sed 's/)/"/g'
+```
+
+### Automated Reporting
+```bash
+# Generate weekly access report
+{
+  echo "Weekly Environment Access Report"
+  echo "Generated: $(date)"
+  echo "================================"
+  kiln info --verify
+} | mail -s "Weekly Kiln Access Report" team@company.com
+```
+
+### Integration with External Tools
+```bash
+# Prometheus metrics
+kiln info | while read line; do
+  file=$(echo "$line" | cut -d'(' -f1 | tr -d ' ')
+  size_kb=$(echo "$line" | grep -o '[0-9]\+\.[0-9]\+')
+  echo "kiln_file_size_kb{file=\"$file\"} $size_kb"
+done
+```

@@ -1,0 +1,262 @@
+---
+title: Configuration Schema
+description: Complete TOML configuration reference for kiln projects with validation rules and examples.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+The `kiln.toml` configuration file defines recipients, access control, and file mappings for your project. All configuration options are validated at load time with clear error messages.
+
+## Schema Overview
+
+```toml
+[recipients]
+name = "public-key"
+
+[groups]
+group-name = ["recipient1", "recipient2"]
+
+[files]
+[files.env-name]
+filename = "path/to/file.env"
+access = ["recipient-or-group"]
+```
+
+## Recipients Section
+
+<Aside type="note">
+Recipients define named public keys that can decrypt environment files. Both age and SSH public keys are supported.
+</Aside>
+
+### Syntax
+
+```toml
+[recipients]
+alice = "age1234567890abcdef..."
+bob = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."
+```
+
+### Validation Rules
+
+- **Name requirements**: Must be valid identifier (letters, numbers, underscore, hyphen)
+- **Key format**: Must be valid age public key (`age1...`) or SSH public key (`ssh-...`)
+- **Uniqueness**: Each recipient name must be unique within the configuration
+- **Key validation**: Public keys are validated for correct format and encoding
+
+### Supported Key Types
+
+**Age Public Keys:**
+```toml
+admin = "age1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
+```
+
+**SSH Ed25519 Keys:**
+```toml
+developer = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGbM7ABCDEFGHIJKLMNOPQRSTUVWXYZ user@host"
+```
+
+**SSH RSA Keys:**
+```toml
+legacy = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC... user@host"
+```
+
+## Groups Section
+
+<Aside type="tip">
+Groups simplify access management by allowing you to grant permissions to multiple recipients at once.
+</Aside>
+
+### Syntax
+
+```toml
+[groups]
+developers = ["alice", "bob", "charlie"]
+admins = ["alice", "admin"]
+contractors = ["external-dev"]
+```
+
+### Validation Rules
+
+- **Group names**: Must be valid identifiers, cannot conflict with recipient names
+- **Member validation**: All group members must exist in the `[recipients]` section
+- **Circular references**: Groups cannot reference other groups (flat structure only)
+- **Empty groups**: Groups must contain at least one member
+
+### Access Patterns
+
+**Role-based access:**
+```toml
+[groups]
+frontend = ["alice", "bob"]
+backend = ["charlie", "dave"]
+devops = ["admin", "deploy"]
+```
+
+**Environment-based access:**
+```toml
+[groups]
+dev-team = ["alice", "bob", "charlie"]
+prod-team = ["admin", "senior-dev"]
+```
+
+## Files Section
+
+<Aside type="caution">
+File configurations define which encrypted files exist and who can access them. Access control is enforced at the file level.
+</Aside>
+
+### Syntax
+
+```toml
+[files.env-name]
+filename = "path/to/encrypted/file"
+access = ["recipient-or-group-or-wildcard"]
+```
+
+### Required Fields
+
+**`filename`**: Path to the encrypted environment file
+- Relative to configuration file location
+- Can use subdirectories: `"environments/prod.env"`
+- Must be unique across all file definitions
+
+**`access`**: Array of recipients, groups, or wildcards
+- Individual recipients: `["alice", "bob"]`
+- Groups: `["developers", "admins"]`
+- Mixed: `["alice", "developers"]`
+- Wildcard: `["*"]` (grants access to all recipients)
+
+### Validation Rules
+
+- **File paths**: Must be valid file paths, cannot contain `..` for security
+- **Access validation**: All access entries must reference valid recipients or groups
+- **Non-empty access**: Access array cannot be empty
+- **Unique filenames**: Each filename can only be used once
+
+### Common Patterns
+
+**Environment separation:**
+```toml
+[files.development]
+filename = "dev.env"
+access = ["*"]
+
+[files.staging]
+filename = "staging.env"
+access = ["developers", "qa"]
+
+[files.production]
+filename = "prod.env"
+access = ["admins"]
+```
+
+**Service-specific files:**
+```toml
+[files.database]
+filename = "db.env"
+access = ["backend", "devops"]
+
+[files.api-keys]
+filename = "keys.env"
+access = ["admins"]
+```
+
+## Configuration Validation
+
+### Load-time Validation
+
+Kiln validates configuration when loading:
+
+1. **TOML syntax**: Must be valid TOML format
+2. **Schema compliance**: All sections and fields must follow the schema
+3. **Reference integrity**: Groups and access lists must reference valid recipients
+4. **Key format validation**: All public keys must be properly formatted
+5. **Path security**: File paths must be safe (no directory traversal)
+
+### Error Messages
+
+**Invalid recipient reference:**
+```
+Error: configuration error: group 'developers' references unknown recipient 'unknown-user'
+```
+
+**Invalid public key:**
+```
+Error: configuration error: recipient 'alice' has invalid public key format
+```
+
+**Duplicate filename:**
+```
+Error: configuration error: filename 'app.env' is used by multiple file definitions
+```
+
+## Environment Variables
+
+### Configuration Override
+
+- `KILN_CONFIG_FILE`: Override default configuration file path
+- `KILN_PRIVATE_KEY_FILE`: Override default private key discovery
+
+### Runtime Behavior
+
+- Configuration is loaded and validated once per command execution
+- Changes require command restart to take effect
+- Invalid configuration prevents all operations
+
+## Best Practices
+
+### Maintainability
+
+1. **Descriptive names**: Use clear recipient and group names
+2. **Logical grouping**: Organize recipients by role or responsibility
+3. **Documentation**: Comment complex access patterns
+4. **Version control**: Track configuration changes in version control
+
+### Example Complete Configuration
+
+```toml
+# Team members with their public keys
+[recipients]
+alice-admin = "age1234567890abcdef..."
+bob-dev = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5..."
+charlie-dev = "age0987654321fedcba..."
+deploy-bot = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQAB..."
+
+# Access groups for role-based permissions
+[groups]
+developers = ["bob-dev", "charlie-dev"]
+admins = ["alice-admin"]
+automation = ["deploy-bot"]
+
+# Environment files with granular access control
+[files.development]
+filename = "environments/dev.env"
+access = ["*"]  # All team members
+
+[files.staging]
+filename = "environments/staging.env"
+access = ["developers", "admins"]
+
+[files.production]
+filename = "environments/prod.env"
+access = ["admins", "automation"]
+
+[files.secrets]
+filename = "secrets/api-keys.env"
+access = ["admins"]
+```
+
+## Migration Guide
+
+### From Legacy Configurations
+
+If migrating from older configuration formats:
+
+1. **Validate syntax**: Ensure TOML format compliance
+2. **Update key formats**: Convert any legacy key formats
+3. **Review access patterns**: Audit and update access controls
+4. **Test thoroughly**: Verify all team members can access appropriate files
+
+### Schema Evolution
+
+Future schema changes will maintain backward compatibility where possible. Breaking changes will include migration guidance and tooling.

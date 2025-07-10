@@ -4,33 +4,43 @@ description: Encrypt your secrets with ease, share safely with your team, deploy
 template: splash
 hero:
   tagline: Encrypt your secrets with ease, share safely with your team, deploy with confidence—all from a command line that you control.
-  image:
-    file: ../../assets/logo.svg
   actions:
     - text: Get Started
-      link: /guides/example/
+      link: introduction
       icon: right-arrow
     - text: GitHub
       link: https://github.com/Thunderbottom/kiln
       icon: external
       variant: minimal
+head:
+    - tag: title
+      content: Docs | kiln
 ---
 
 import { Card, CardGrid } from '@astrojs/starlight/components';
 
-## Next steps
+# See it in Action
 
-<CardGrid stagger>
-	<Card title="Update content" icon="pencil">
-		Edit `src/content/docs/index.mdx` to see this page change.
-	</Card>
-	<Card title="Add new content" icon="add-document">
-		Add Markdown or MDX files to `src/content/docs` to create new pages.
-	</Card>
-	<Card title="Configure your site" icon="setting">
-		Edit your `sidebar` and other config in `astro.config.mjs`.
-	</Card>
-	<Card title="Read the docs" icon="open-book">
-		Learn more in [the Starlight Docs](https://starlight.astro.build/).
-	</Card>
+<div class="hero-gif">
+  <img src="/kiln-demo.gif" alt="kiln-demo" />
+</div>
+
+## Features
+
+<CardGrid>
+<Card title="Truly decentralized" icon="star">
+No servers, databases, or external dependencies. Your secrets stay with your code.
+</Card>
+
+<Card title="Offline-first" icon="laptop">
+Works completely offline with local files. Deploy anywhere, anytime.
+</Card>
+
+<Card title="Git-native" icon="github">
+Encrypted files commit safely alongside your code. No separate infrastructure.
+</Card>
+
+<Card title="Role-based access" icon="random">
+Fine-grained permissions using modern cryptography. Control who sees what.
+</Card>
 </CardGrid>

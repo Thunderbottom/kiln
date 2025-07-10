@@ -1,0 +1,206 @@
+---
+title: File Access Control
+description: Advanced patterns for managing fine-grained access control across different environments and use cases.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+File access control determines who can decrypt which files in your kiln project. Each file defines its own security boundary through access policies.
+
+## Access Control Fundamentals
+
+Every file in kiln specifies exactly who can decrypt it through the `access` array. This granular approach enables precise security boundaries while maintaining operational flexibility.
+
+**Core principles:**
+- Grant minimum necessary access (principle of least privilege)
+- Make access patterns clear and auditable
+- Align permissions with actual responsibilities
+- Layer multiple controls rather than relying on single boundaries
+
+## Access Pattern Types
+
+### Universal Access
+
+Grant access to all defined recipients:
+
+```toml
+[files]
+shared-config = { 
+  filename = "shared.env", 
+  access = ["*"] 
+}
+```
+
+**Use cases:** Non-sensitive development configuration, team-wide settings, common tool configuration.
+
+**Security considerations:** Remember that "*" includes service accounts and all future team members.
+
+### Group-Based Access
+
+Leverage groups for role-based permissions:
+
+```toml
+[files]
+api-secrets = { 
+  filename = "api.env", 
+  access = ["backend-team", "platform-team"] 
+}
+```
+
+**Benefits:** Scales with team growth, reflects organizational structure, easier to audit.
+
+### Individual Access
+
+Grant access to specific people:
+
+```toml
+[files]
+admin-keys = { 
+  filename = "admin.env", 
+  access = ["alice-admin", "bob-ops"] 
+}
+```
+
+**Use cases:** Highly sensitive credentials, personal API keys, emergency access accounts.
+
+### Mixed Access Patterns
+
+Combine multiple access types:
+
+```toml
+[files]
+incident-response = { 
+  filename = "incident.env", 
+  access = ["ops-team", "alice-lead", "emergency-oncall"] 
+}
+```
+
+**Benefits:** Flexible access for complex scenarios, handles exceptional cases gracefully.
+
+## Environment-Based Access Patterns
+
+### Development Environments
+
+<Tabs>
+<TabItem label="Open Development">
+
+```toml
+[files]
+local = { 
+  filename = "local.env", 
+  access = ["*"] 
+}
+
+dev-shared = { 
+  filename = "dev.env", 
+  access = ["developers", "qa-team"] 
+}
+```
+
+Broad access for collaboration with non-production data.
+
+</TabItem>
+<TabItem label="Feature Branches">
+
+```toml
+[files]
+feature-auth = { 
+  filename = "feature-auth.env", 
+  access = ["backend-team", "alice-lead"] 
+}
+
+feature-payments = { 
+  filename = "feature-payments.env", 
+  access = ["payments-team", "security-team"] 
+}
+```
+
+Team-specific access for feature development.
+
+</TabItem>
+</Tabs>
+
+### Staging Environments
+
+```toml
+[files]
+staging = { 
+  filename = "staging.env", 
+  access = ["developers", "qa-team", "product-team"] 
+}
+
+staging-db = { 
+  filename = "staging-db.env", 
+  access = ["senior-developers", "ops-team"] 
+}
+```
+
+### Production Environments
+
+```toml
+[files]
+production = { 
+  filename = "prod.env", 
+  access = ["ops-team", "senior-engineers"] 
+}
+
+prod-database = { 
+  filename = "prod-db.env", 
+  access = ["dba-team", "alice-architect"] 
+}
+
+prod-emergency = { 
+  filename = "prod-emergency.env", 
+  access = ["incident-commanders", "cto"] 
+}
+```
+## Access Control Validation
+
+### Configuration Review Checklist
+
+**Principle verification:**
+- Does each file follow least privilege?
+- Are access patterns justified by business need?
+- Do access levels match actual responsibilities?
+
+**Group consistency:**
+- Do group memberships reflect current team structure?
+- Are group names clear and descriptive?
+- Are there unused or obsolete groups?
+
+**File coverage:**
+- Does every file have appropriate access controls?
+- Are there files with overly broad access?
+- Do sensitive files have sufficiently restricted access?
+
+### Automated Validation
+
+Create scripts to validate access patterns:
+
+```bash
+#!/bin/bash
+# Basic access pattern validation
+
+echo "Files with universal access:"
+grep -n 'access.*\*' kiln.toml
+
+echo "Files with single-person access:"
+grep -n 'access.*\["[^"]*"\]' kiln.toml
+
+echo "Validating recipient references..."
+kiln info --verify
+```
+
+## Best Practices
+
+**Start restrictive** - Begin with minimal access and expand as needed. It's easier to grant access than revoke it.
+
+**Document rationale** - Comment your configuration to explain complex access patterns and business justifications.
+
+**Regular reviews** - Schedule periodic access reviews to ensure patterns still match team structure and needs.
+
+**Test changes** - Always verify access changes work as expected before considering them complete.
+
+**Plan for incidents** - Ensure critical systems have emergency access procedures that don't depend on individual availability.
+
+This approach to access control scales from small teams to enterprise environments while maintaining clarity about who can access what resources.

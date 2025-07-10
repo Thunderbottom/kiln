@@ -1,0 +1,188 @@
+---
+title: Recipients and Groups
+description: Managing team members and organizing access through recipients and groups in kiln.
+---
+
+import { Tabs, TabItem, Aside, Steps, LinkButton } from '@astrojs/starlight/components';
+
+Recipients and groups form kiln's access control foundation. Recipients are individuals who can decrypt files, while groups organize recipients for easier management.
+
+## Recipients
+
+Recipients map names to public keys. Each represents someone who can decrypt specific files.
+
+```toml
+[recipients]
+alice = "age1abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+bob = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJhcOOImxvs..."
+```
+
+### Adding Recipients
+
+<Steps>
+
+1. They generate their key:
+   ```bash
+   kiln init key
+   cat ~/.kiln/kiln.key.pub
+   ```
+
+2. Rekey the file with the new recipient:
+   ```bash
+   kiln rekey --file staging --add-recipient "new-user=age1def456..."
+   ```
+</Steps>
+
+kiln will automatically add the recipient to the recipients list, and grant them access to the file.
+
+### Removing Recipients
+
+1. Remove from `kiln.toml`
+2. Remove from all groups  
+3. Rekey affected files
+
+<Aside type="caution">
+Removing someone from configuration doesn't immediately revoke access. You must rekey files to exclude them.
+</Aside>
+
+### Naming Conventions
+
+<Tabs>
+<TabItem label="Recommended">
+
+```toml
+[recipients]
+alice-smith = "age1abc123..."
+bob-backend = "age1def456..."  
+deploy-bot = "age1ghi789..."
+```
+
+Clear names indicating person and role.
+
+</TabItem>
+<TabItem label="Avoid">
+
+```toml
+[recipients]
+a = "age1abc123..."           # Too short
+user123 = "age1def456..."     # Unclear
+"Bob Jones" = "age1ghi789..." # Requires quotes
+```
+
+</TabItem>
+</Tabs>
+
+## Groups
+
+Groups organize recipients into logical collections, simplifying access management.
+
+```toml
+[groups]
+developers = ["alice", "bob", "charlie"]
+ops-team = ["alice", "david"]
+managers = ["alice", "eve"]
+```
+
+### Common Patterns
+
+**Role-based:**
+```toml
+[groups]
+junior-devs = ["bob", "charlie"]
+senior-devs = ["alice", "david"]
+team-leads = ["alice"]
+```
+
+**Project-based:**
+```toml
+[groups]
+project-alpha = ["alice", "bob"]
+project-beta = ["charlie", "david"]
+platform-team = ["alice", "eve"]
+```
+
+### Group Rules
+
+- Recipients must exist before being used in groups
+- People can belong to multiple groups
+- Groups are resolved during access control, not nested
+
+## Team Scaling
+
+### Small Team (2-5 People)
+
+```toml
+[recipients]
+alice = "age1abc123..."
+bob = "age1def456..."
+
+[groups]
+developers = ["alice", "bob"]
+admins = ["alice"]
+```
+
+### Medium Team (5-20 People)
+
+```toml
+[recipients]
+alice-lead = "age1abc123..."
+bob-senior = "age1def456..."
+charlie-mid = "age1ghi789..."
+david-ops = "age1jkl012..."
+
+[groups]
+developers = ["alice-lead", "bob-senior", "charlie-mid"]
+ops-team = ["alice-lead", "david-ops"]
+senior-staff = ["alice-lead", "bob-senior"]
+```
+
+### Large Team (20+ People)
+
+```toml
+[groups]
+backend-team = ["alice", "bob", "charlie"]
+frontend-team = ["diana", "eve", "frank"]
+platform-team = ["george", "henry"]
+
+senior-engineers = ["alice", "diana", "george"]
+ops-team = ["george", "henry", "iris"]
+```
+
+## Access Resolution
+
+When resolving file access:
+
+1. `"*"` expands to all recipients
+2. Group names expand to their members
+3. Individual names resolve to public keys
+4. Duplicates are removed
+5. File is encrypted for all resolved keys
+
+Example:
+```toml
+[groups]
+developers = ["alice", "bob"]
+
+[files]
+special = { 
+  access = ["alice", "developers", "charlie"] 
+}
+```
+
+Results in access for: alice, bob, charlie (alice not duplicated).
+
+## Best Practices
+
+- **Start with roles** - Design groups around job functions
+- **Use descriptive names** - Names should clearly convey purpose
+- **Regular maintenance** - Audit memberships as people change roles
+- **Keep groups focused** - Each group should have a single purpose
+- **Plan for growth** - Design structures that scale with your team
+
+This foundation enables secure, scalable access control that grows with your team while maintaining clarity about permissions.
+
+## Next Steps
+
+Take a look at how to integrate kiln in your team's workflow:
+
+<LinkButton href="/workflows/team-setup/" variant="primary">Team Setup Guide</LinkButton>

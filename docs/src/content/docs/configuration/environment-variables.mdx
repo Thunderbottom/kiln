@@ -1,0 +1,425 @@
+---
+title: Environment Variables
+description: Configure kiln's runtime behavior using environment variables for key discovery, editor selection, and operational settings.
+---
+
+import { Tabs, TabItem, Aside } from '@astrojs/starlight/components';
+
+kiln uses environment variables to configure its runtime behavior. These settings control key discovery, editor preferences, and other operational aspects without requiring changes to your project configuration.
+
+## Core Environment Variables
+
+### `KILN_PRIVATE_KEY_FILE`
+
+Override the default private key discovery:
+
+```bash
+# Use a specific private key file
+export KILN_PRIVATE_KEY_FILE="~/.keys/production.key"
+kiln get DATABASE_URL
+
+# Use a project-specific key
+export KILN_PRIVATE_KEY_FILE="./keys/project-key"
+kiln run -- npm start
+```
+
+**Use cases:** Multiple projects with different keys, shared CI/CD environments, role-specific key usage, testing with different identities.
+
+<Aside type="tip">
+This is the primary way to specify which key kiln should use when you have multiple keys available.
+</Aside>
+
+### `EDITOR`
+
+Specify the editor for `kiln edit` command:
+
+<Tabs>
+<TabItem label="Common Editors">
+
+```bash
+# Visual Studio Code
+export EDITOR="code --wait"
+
+# Vim
+export EDITOR="vim"
+
+# Nano
+export EDITOR="nano"
+
+# Sublime Text
+export EDITOR="subl --wait"
+```
+
+</TabItem>
+<TabItem label="Advanced Configurations">
+
+```bash
+# VS Code with specific settings
+export EDITOR="code --wait --new-window"
+
+# Vim with specific options
+export EDITOR="vim +startinsert"
+
+# Use different editor for kiln specifically
+alias kiln-edit='EDITOR="nano" kiln edit'
+```
+
+</TabItem>
+</Tabs>
+
+**Editor requirements:**
+- Must support opening files passed as arguments
+- Should support `--wait` flag for GUI editors
+- Must exit properly to signal completion to kiln
+
+## Key Discovery Behavior
+
+kiln searches for private keys in this order when `KILN_PRIVATE_KEY_FILE` is not set:
+
+1. **Environment variable**: `$KILN_PRIVATE_KEY_FILE` (if set)
+2. **kiln default**: `~/.kiln/kiln.key`
+3. **SSH keys**: `~/.ssh/id_ed25519`, `~/.ssh/id_rsa`
+
+### Configuration-Aware Discovery
+
+When a `kiln.toml` exists, kiln attempts to find a compatible key by examining recipients and searching for a private key that matches any recipient's public key.
+
+### Custom Search Paths
+
+For complex environments, create wrapper scripts:
+
+```bash
+#!/bin/bash
+# kiln-wrapper.sh - Custom key discovery
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
+CONFIG_FILE="$PROJECT_ROOT/kiln.toml"
+
+if [[ -f "$CONFIG_FILE" ]]; then
+    if [[ -f "$PROJECT_ROOT/.kiln-key" ]]; then
+        export KILN_PRIVATE_KEY_FILE="$PROJECT_ROOT/.kiln-key"
+    elif [[ -f "$HOME/.kiln/$(basename $PROJECT_ROOT).key" ]]; then
+        export KILN_PRIVATE_KEY_FILE="$HOME/.kiln/$(basename $PROJECT_ROOT).key"
+    fi
+fi
+
+exec kiln "$@"
+```
+
+## CI/CD Configuration
+
+Configure kiln for automated environments:
+
+### GitHub Actions
+
+```yaml
+name: Deploy with kiln
+on: [push]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      
+      - name: Setup kiln key
+        run: |
+          echo "${{ secrets.KILN_PRIVATE_KEY }}" > ~/.kiln-deploy.key
+          chmod 600 ~/.kiln-deploy.key
+          echo "KILN_PRIVATE_KEY_FILE=$HOME/.kiln-deploy.key" >> $GITHUB_ENV
+      
+      - name: Deploy application
+        run: kiln run --file production -- ./deploy.sh
+```
+
+### GitLab CI
+
+```yaml
+deploy:
+  stage: deploy
+  variables:
+    KILN_PRIVATE_KEY_FILE: "/tmp/kiln-deploy.key"
+  before_script:
+    - echo "$KILN_PRIVATE_KEY" > /tmp/kiln-deploy.key
+    - chmod 600 /tmp/kiln-deploy.key
+  script:
+    - kiln run --file production -- ./deploy.sh
+  after_script:
+    - rm -f /tmp/kiln-deploy.key
+```
+
+### Jenkins
+
+```groovy
+pipeline {
+    agent any
+    
+    environment {
+        KILN_PRIVATE_KEY_FILE = '/tmp/kiln-deploy.key'
+    }
+    
+    stages {
+        stage('Setup') {
+            steps {
+                withCredentials([file(credentialsId: 'kiln-deploy-key', variable: 'KEY_FILE')]) {
+                    sh 'cp $KEY_FILE /tmp/kiln-deploy.key'
+                    sh 'chmod 600 /tmp/kiln-deploy.key'
+                }
+            }
+        }
+        
+        stage('Deploy') {
+            steps {
+                sh 'kiln run --file production -- ./deploy.sh'
+            }
+        }
+    }
+    
+    post {
+        always {
+            sh 'rm -f /tmp/kiln-deploy.key'
+        }
+    }
+}
+```
+
+## Development Environment Setup
+
+### Per-Project Configuration
+
+Set up project-specific environment variables:
+
+<Tabs>
+<TabItem label=".envrc (direnv)">
+
+```bash
+# .envrc - Automatically loaded by direnv
+export KILN_PRIVATE_KEY_FILE="$PWD/.kiln/project.key"
+export EDITOR="code --wait"
+
+if [[ -f "$PWD/kiln.toml" ]]; then
+    echo "kiln: Loaded configuration for $(basename $PWD)"
+fi
+```
+
+Setup with direnv:
+```bash
+echo 'export KILN_PRIVATE_KEY_FILE="$PWD/.kiln/project.key"' > .envrc
+direnv allow
+```
+
+</TabItem>
+<TabItem label="Shell Profile">
+
+```bash
+# ~/.bashrc or ~/.zshrc
+kiln_project() {
+    local project_root
+    project_root="$(git rev-parse --show-toplevel 2>/dev/null)"
+    
+    if [[ -n "$project_root" && -f "$project_root/kiln.toml" ]]; then
+        export KILN_PRIVATE_KEY_FILE="$project_root/.kiln/project.key"
+        echo "kiln: Using project key for $(basename "$project_root")"
+    fi
+}
+
+# Auto-detect when changing directories
+cd() {
+    builtin cd "$@" && kiln_project
+}
+```
+
+</TabItem>
+<TabItem label="Make Integration">
+
+```makefile
+# Makefile - Project automation
+.PHONY: dev staging production
+
+dev:
+	KILN_PRIVATE_KEY_FILE=./.kiln/dev.key kiln run -- npm run dev
+
+staging:
+	KILN_PRIVATE_KEY_FILE=./.kiln/staging.key kiln run --file staging -- ./deploy-staging.sh
+
+production:
+	@if [[ ! -f ~/.kiln/production.key ]]; then \
+		echo "Error: Production key not found"; exit 1; \
+	fi
+	KILN_PRIVATE_KEY_FILE=~/.kiln/production.key kiln run --file production -- ./deploy-production.sh
+```
+
+</TabItem>
+</Tabs>
+
+## Container Environments
+
+### Docker Configuration
+
+<Tabs>
+<TabItem label="Runtime Secrets">
+
+```dockerfile
+FROM node:18-alpine
+
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+
+# Install kiln
+RUN wget -O /usr/local/bin/kiln \
+    https://github.com/thunderbottom/kiln/releases/latest/download/kiln-linux-amd64 \
+    && chmod +x /usr/local/bin/kiln
+
+COPY . .
+CMD ["kiln", "run", "--", "npm", "start"]
+```
+
+Run with secrets:
+```bash
+docker run -v ~/.kiln/prod.key:/keys/kiln.key:ro \
+  -e KILN_PRIVATE_KEY_FILE=/keys/kiln.key \
+  myapp:latest
+```
+
+</TabItem>
+<TabItem label="Build-Time Secrets">
+
+```dockerfile
+# Multi-stage build with secrets
+FROM alpine:latest as secrets
+RUN apk add --no-cache wget
+RUN wget -O /usr/local/bin/kiln \
+    https://github.com/thunderbottom/kiln/releases/latest/download/kiln-linux-amd64 \
+    && chmod +x /usr/local/bin/kiln
+
+COPY kiln.toml production.env ./
+
+RUN --mount=type=secret,id=kiln_key,target=/keys/kiln.key \
+    KILN_PRIVATE_KEY_FILE=/keys/kiln.key \
+    kiln export --format shell > /tmp/env.sh
+
+FROM node:18-alpine
+WORKDIR /app
+COPY package*.json ./
+RUN npm install
+COPY . .
+COPY --from=secrets /tmp/env.sh /tmp/env.sh
+
+CMD ["sh", "-c", "source /tmp/env.sh && npm start"]
+```
+
+</TabItem>
+</Tabs>
+
+### Kubernetes Configuration
+
+```yaml
+apiVersion: v1
+kind: Secret
+metadata:
+  name: kiln-key
+type: Opaque
+data:
+  kiln.key: <base64-encoded-private-key>
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        image: myapp:latest
+        env:
+        - name: KILN_PRIVATE_KEY_FILE
+          value: /secrets/kiln.key
+        volumeMounts:
+        - name: kiln-key
+          mountPath: /secrets
+          readOnly: true
+        command: ["kiln", "run", "--file", "production", "--", "npm", "start"]
+      volumes:
+      - name: kiln-key
+        secret:
+          secretName: kiln-key
+          defaultMode: 0600
+```
+
+## Debugging and Troubleshooting
+
+### Verbose Output
+
+Use the verbose flag for debugging:
+
+```bash
+kiln --verbose get DATABASE_URL
+kiln --verbose run -- ./app
+KILN_PRIVATE_KEY_FILE=~/.kiln/debug.key kiln --verbose info --verify
+```
+
+### Environment Diagnostics
+
+Create diagnostic scripts:
+
+```bash
+#!/bin/bash
+# kiln-diagnostic.sh
+
+echo "=== kiln Environment Diagnostics ==="
+
+echo "kiln version:"
+kiln --version
+
+echo "Environment variables:"
+env | grep -E "(KILN|EDITOR)" || echo "No kiln environment variables set"
+
+echo "Key discovery:"
+if [[ -n "$KILN_PRIVATE_KEY_FILE" ]]; then
+    echo "Using explicit key: $KILN_PRIVATE_KEY_FILE"
+    if [[ -f "$KILN_PRIVATE_KEY_FILE" ]]; then
+        echo "✓ Key file exists"
+    else
+        echo "✗ Key file not found"
+    fi
+else
+    echo "Using default key discovery"
+    for key in ~/.kiln/kiln.key ~/.ssh/id_ed25519 ~/.ssh/id_rsa; do
+        if [[ -f "$key" ]]; then
+            echo "✓ Found: $key"
+        else
+            echo "✗ Missing: $key"
+        fi
+    done
+fi
+
+echo "Configuration:"
+if [[ -f "kiln.toml" ]]; then
+    echo "✓ Found kiln.toml"
+else
+    echo "✗ No kiln.toml in current directory"
+fi
+
+echo "Access test:"
+if command -v kiln >/dev/null && [[ -f "kiln.toml" ]]; then
+    kiln info --verify 2>&1 || echo "Access verification failed"
+else
+    echo "Skipped (kiln not available or no config)"
+fi
+```
+
+## Best Practices
+
+**Explicit configuration** - Use `KILN_PRIVATE_KEY_FILE` in production rather than relying on discovery.
+
+**Secure key handling** - Never log or expose private key paths in CI/CD outputs.
+
+**Environment isolation** - Use different keys for different environments to maintain separation.
+
+**Regular rotation** - Implement procedures for rotating keys and updating environment variables.
+
+**Documentation** - Document your team's environment variable conventions and setup procedures.
+
+This environment variable configuration enables kiln to work seamlessly across development, CI/CD, and production environments while maintaining security and operational flexibility.

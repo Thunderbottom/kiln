@@ -1,0 +1,205 @@
+---
+title: Configuration File
+description: Complete reference for kiln.toml configuration including recipients, groups, files, and access control patterns.
+---
+
+import { Tabs, TabItem, Aside, Code } from '@astrojs/starlight/components';
+
+The `kiln.toml` file defines who can access your secrets and how your team is organized. It contains three main sections that control kiln's security model.
+
+## Basic Structure
+
+```toml
+# Who can decrypt files
+[recipients]
+alice = "age1abc123..."
+bob = "ssh-ed25519 AAAAC3..."
+
+# Optional team groupings
+[groups]
+developers = ["alice", "bob"]
+
+# Files and their access controls
+[files]
+default = { filename = ".kiln.env", access = ["*"] }
+```
+
+## Recipients Section
+
+The `[recipients]` section maps names to public keys. This is where you define everyone who can decrypt kiln files.
+
+### Supported Key Types
+
+<Tabs>
+<TabItem label="Age Keys">
+
+```toml
+[recipients]
+alice = "age1abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+bob = "age1def456ghi789jkl012mno345pqr678stu901vwx234yz567abc"
+```
+
+Age keys are 62-character strings starting with `age1`. They're purpose-built for encryption and recommended for new projects.
+
+</TabItem>
+<TabItem label="SSH Keys">
+
+```toml
+[recipients]
+charlie = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJhcOOImxvs..."
+david = "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7..."
+```
+
+Standard SSH public keys work seamlessly. Perfect for teams already using SSH infrastructure.
+
+</TabItem>
+</Tabs>
+
+### Naming Conventions
+
+Use clear, consistent names:
+
+```toml
+[recipients]
+alice-smith = "age1abc123..."    # Good: clear and consistent
+bob-jones = "age1def456..."      # Good: follows same pattern
+deploy-bot = "age1ghi789..."     # Good: describes purpose
+```
+
+Avoid spaces, special characters, or unclear abbreviations.
+
+## Groups Section
+
+Groups organize recipients into logical collections, simplifying access management.
+
+```toml
+[groups]
+developers = ["alice", "bob", "charlie"]
+admins = ["alice", "david"] 
+contractors = ["emma", "frank"]
+```
+
+### Common Patterns
+
+**Role-based groups:**
+```toml
+[groups]
+developers = ["alice", "bob"]
+ops-team = ["charlie", "david"]
+managers = ["alice", "eve"]
+```
+
+**Hierarchical access:**
+```toml
+[groups]
+junior-devs = ["bob", "charlie"]
+senior-devs = ["alice", "david"]
+team-leads = ["alice"]
+```
+
+**Project-based groups:**
+```toml
+[groups]
+project-alpha = ["alice", "bob"]
+project-beta = ["charlie", "david"]
+platform-team = ["alice", "eve"]
+```
+
+Recipients must exist in the `[recipients]` section before being used in groups.
+
+## Files Section
+
+The `[files]` section defines encrypted files and who can access them.
+
+```toml
+[files]
+name = { filename = "path/to/file.env", access = ["who", "can", "access"] }
+```
+
+### Access Patterns
+
+**Universal access** - Everyone can decrypt:
+```toml
+[files]
+shared = { filename = "shared.env", access = ["*"] }
+```
+
+**Group access** - All group members can decrypt:
+```toml
+[files]
+staging = { filename = "staging.env", access = ["developers"] }
+```
+
+**Individual access** - Specific people only:
+```toml
+[files]
+admin = { filename = "admin.env", access = ["alice"] }
+```
+
+**Mixed access** - Combine groups and individuals:
+```toml
+[files]
+special = { filename = "special.env", access = ["alice", "developers", "emergency-user"] }
+```
+
+### Environment Separation
+
+Typical setup for different environments:
+
+```toml
+[files]
+development = { filename = "dev.env", access = ["*"] }
+staging = { filename = "staging.env", access = ["developers"] }
+production = { filename = "prod.env", access = ["ops-team", "team-leads"] }
+```
+
+## Access Control Resolution
+
+kiln resolves access by:
+
+1. Expanding `"*"` to all recipients
+2. Replacing group names with their members
+3. Collecting all unique public keys
+4. Encrypting the file for those keys
+
+<Aside type="caution">
+Access is additive - recipients in multiple groups get combined access to files.
+</Aside>
+
+## Complete Example
+
+```toml
+[recipients]
+alice-lead = "age1abc123def456ghi789jkl012mno345pqr678stu901vwx234yz"
+bob-dev = "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGJhcOOImxvs..."
+charlie-ops = "age1def456ghi789jkl012mno345pqr678stu901vwx234yz567abc"
+deploy-bot = "age1ghi789jkl012mno345pqr678stu901vwx234yz567abcdef"
+
+[groups]
+developers = ["alice-lead", "bob-dev"]
+ops-team = ["alice-lead", "charlie-ops"]
+automation = ["deploy-bot"]
+
+[files]
+development = { filename = "dev.env", access = ["developers"] }
+staging = { filename = "staging.env", access = ["developers"] }
+production = { filename = "prod.env", access = ["ops-team"] }
+deployment = { filename = "deploy.env", access = ["automation"] }
+```
+
+## Validation
+
+kiln validates your configuration on load:
+
+- Recipients must have valid public keys
+- Groups can only reference defined recipients  
+- Files must have non-empty paths and access lists
+- Access lists can only reference defined recipients or groups
+
+## Best Practices
+
+- Start simple with basic recipients and files
+- Use meaningful names that reflect actual roles
+- Regularly audit group memberships as teams change
+- Keep access patterns aligned with business needs
+- Document complex configurations with comments

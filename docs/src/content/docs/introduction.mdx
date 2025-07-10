@@ -1,0 +1,59 @@
+---
+title: Introduction
+description: Learn what kiln is and why it's the simplest way to manage encrypted environment variables for your team.
+---
+
+import { Aside, LinkButton } from '@astrojs/starlight/components';
+
+kiln is a command-line tool for managing encrypted environment variables using [age encryption](https://age-encryption.org/). It provides a simple, offline-first approach to secret management for development teams.
+
+## What kiln Does
+
+kiln encrypts your environment variables into files that can be safely stored alongside your code. Each team member has their own encryption key and can only access the environments they're authorized for.
+
+Instead of sharing `.env` files or depending on external secret services, kiln lets you:
+
+- Encrypt secrets locally with no external dependencies
+- Commit encrypted files safely to version control
+- Control access per environment (dev, staging, production)
+- Run applications with automatically injected variables
+
+## How It Works
+
+kiln uses public-key cryptography where each person has a key pair. Environment files are encrypted for specific recipients, so only authorized team members can decrypt them.
+
+**Core workflow:**
+1. Generate encryption keys for team members
+2. Define who can access which environments in `kiln.toml`
+3. Encrypt variables into environment-specific files
+4. Run applications with `kiln run` to inject decrypted variables
+
+<Aside type="tip">
+kiln works entirely offline - no servers, accounts, or network connections required.
+</Aside>
+
+## Key Benefits
+
+**Version control friendly** - Encrypted files are safe to commit and share
+
+**Team collaboration** - Role-based access using existing SSH keys or new age keys
+
+**Zero infrastructure** - No external services or databases to maintain
+
+**Simple workflow** - Familiar command-line interface that integrates with existing tools
+
+## When to Use kiln
+
+kiln is ideal for teams that want:
+- Secrets to travel with code in version control
+- Offline deployment capabilities
+- Simple access control without complex infrastructure
+- A lightweight alternative to hosted secret management services
+
+## Getting Started
+
+Ready to secure your environment variables? 
+
+<LinkButton href="/installation/" variant="primary">Install kiln</LinkButton>
+<LinkButton href="/quick-start/" variant="secondary">5-Minute Tutorial</LinkButton>
+<LinkButton href="/basic-concepts/" variant="minimal">Learn Core Concepts</LinkButton>

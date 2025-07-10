@@ -1,0 +1,368 @@
+---
+title: set
+---
+
+import { Aside, LinkButton } from '@astrojs/starlight/components';
+
+Add or update environment variables in encrypted files.
+
+## Synopsis
+
+```bash
+kiln set <name> [value] [options]
+```
+
+The `set` command securely stores environment variables by encrypting them for authorized recipients. Variables are validated for security and stored in the specified environment file.
+
+## Arguments
+
+- `<name>`: Environment variable name (optional, if `--from-file` is provided)
+- `[value]`: Variable value (optional, prompts if not provided)
+
+## Options
+
+- `--file`, `-f`: Environment file to modify (default: `default`)
+- `--from-file`: JSON file containing environment variables to set
+
+## Examples
+
+### Interactive Input
+```bash
+kiln set DATABASE_URL
+# Prompts: Enter value for DATABASE_URL: [hidden input]
+```
+
+### Direct Value
+```bash
+kiln set PORT 8080
+kiln set API_KEY "sk-1234567890abcdef"
+```
+
+### Bulk Import from JSON
+```bash
+kiln set --from-file variables.json
+kiln set --from-file config/prod-vars.json --file production
+```
+
+### Specific Environment File
+```bash
+kiln set DATABASE_URL --file production
+kiln set DEBUG_MODE true --file development
+```
+
+## Variable Name Validation
+
+Variable names must follow environment variable conventions:
+- Start with letter or underscore (`A-Z`, `a-z`, `_`)
+- Contain only letters, numbers, and underscores
+- Case-sensitive (uppercase recommended)
+
+**Valid names:**
+```bash
+kiln set DATABASE_URL
+kiln set API_KEY_V2
+kiln set _PRIVATE_VAR
+```
+
+**Invalid names:**
+```bash
+kiln set api-key      # hyphens not allowed
+kiln set 123_VAR      # cannot start with number
+kiln set var.name     # dots not allowed
+```
+
+## Value Handling
+
+### Secure Input
+
+<Aside type="tip">
+When no value is provided, `set` prompts for input with hidden characters to protect sensitive data from terminal history and shoulder surfing.
+</Aside>
+
+When no value is provided, `set` prompts for input with hidden characters:
+```bash
+kiln set SECRET_PASSWORD
+# Enter value for SECRET_PASSWORD: ********
+```
+
+### Value Validation
+- Maximum size: 1MB per variable
+- No null bytes allowed
+- Control characters are sanitized
+- Newlines and tabs are preserved
+
+## JSON File Format
+
+<Aside type="tip">
+The `--from-file` option accepts JSON files with key-value pairs where values can be strings, numbers, booleans, or null.
+</Aside>
+
+### Supported JSON Structure
+
+```json
+{
+  "DATABASE_URL": "postgresql://localhost:5432/myapp",
+  "API_KEY": "sk-1234567890abcdef",
+  "PORT": 8080,
+  "DEBUG_MODE": true,
+  "OPTIONAL_VAR": null,
+  "TIMEOUT": 30.5
+}
+```
+
+### Type Conversion
+
+- **Strings**: Used as-is
+- **Numbers**: Converted to string representation (integers without decimal, floats with appropriate precision)
+- **Booleans**: Converted to `"true"` or `"false"`
+- **null**: Converted to empty string
+- **Objects/Arrays**: Not supported (validation error)
+
+### JSON File Examples
+
+**Development configuration:**
+```json
+{
+  "NODE_ENV": "development",
+  "DATABASE_URL": "postgresql://localhost:5432/myapp_dev",
+  "REDIS_URL": "redis://localhost:6379",
+  "DEBUG": true,
+  "LOG_LEVEL": "debug",
+  "PORT": 3000
+}
+```
+
+**Production secrets:**
+```json
+{
+  "DATABASE_URL": "postgresql://prod-db:5432/myapp",
+  "JWT_SECRET": "super-secret-key-for-production",
+  "API_KEY": "prod-api-key-12345",
+  "ENCRYPTION_KEY": "32-byte-base64-encoded-key",
+  "DEBUG": false
+}
+```
+Values containing spaces, quotes, or special characters are handled automatically:
+```bash
+kiln set CONNECTION_STRING "host=localhost;user=admin;password=complex!@#"
+kiln set JSON_CONFIG '{"key": "value", "nested": {"prop": true}}'
+```
+
+## Security Features
+
+<Aside type="note">
+Variables are encrypted using age encryption with file-level access control. Each file has independent access permissions defined in your configuration.
+</Aside>
+
+### Memory Safety
+- Values are wiped from memory after encryption
+- Input is cleared from terminal buffers
+- No sensitive data persists in process memory
+
+### Access Control
+The command respects file-level access control defined in `kiln.toml`:
+```toml
+[files.production]
+filename = "prod.env"
+access = ["admin", "deploy-team"]
+
+[files.development]
+filename = "dev.env"
+access = ["*"]  # All recipients
+```
+
+## File Operations
+
+### Atomic Updates
+Variables are updated atomically:
+1. Load existing variables
+2. Update target variable
+3. Re-encrypt entire file
+4. Write to disk atomically
+
+### File Creation
+If the target file doesn't exist, `set` creates it with the first variable:
+```bash
+kiln set FIRST_VAR "initial value" --file new-environment
+# Creates new-environment.env with proper encryption
+```
+
+## Error Handling
+
+### Common Errors
+
+**Configuration not found:**
+```bash
+kiln set VAR value
+# Error: configuration file 'kiln.toml' not found (use 'kiln init config' to create)
+```
+
+**Invalid variable name:**
+```bash
+kiln set invalid-name value
+# Error: invalid variable name: must start with letter or underscore, followed by letters, numbers, or underscores
+```
+
+**Access denied:**
+```bash
+kiln set PROD_VAR value --file production
+# Error: security error: access denied for 'production' (check file permissions in kiln.toml)
+```
+
+**JSON file not found:**
+```bash
+kiln set --from-file missing.json
+# Error: file does not exist
+```
+
+**Invalid JSON file:**
+```bash
+kiln set --from-file invalid.json
+# Error: invalid JSON in file 'invalid.json': unexpected character ',' at position 15
+```
+
+**Unsupported value types:**
+```bash
+# JSON with array value
+echo '{"CONFIG": ["item1", "item2"]}' > config.json
+kiln set --from-file config.json
+# Error: unsupported value type for 'CONFIG': []interface {}
+```
+
+**Variable name conflicts:**
+```bash
+kiln set DATABASE_URL --from-file config.json
+# Error: cannot use both --from-file and variable name argument
+```
+
+**File not configured:**
+```bash
+kiln set VAR value --file undefined
+# Error: configuration error: file 'undefined' not configured (check kiln.toml file definitions)
+```
+
+## Integration Patterns
+
+### CI/CD Pipelines
+```bash
+# Set deployment variables from environment
+kiln set DATABASE_URL "$CI_DATABASE_URL" --file production
+kiln set API_TOKEN "$CI_API_TOKEN" --file production
+
+# Bulk import from generated JSON
+echo "$CI_CONFIG_JSON" > /tmp/config.json
+kiln set --from-file /tmp/config.json --file production
+```
+
+### Configuration Migration
+```bash
+# Export from existing system
+kubectl get secret app-config -o json | jq '.data | map_values(@base64d)' > config.json
+kiln set --from-file config.json --file production
+
+# Import from dotenv-style files (with conversion)
+env | grep '^APP_' | jq -R 'split("=") | {(.[0]): .[1]}' | jq -s add > app-vars.json
+kiln set --from-file app-vars.json --file development
+```
+
+### Local Development
+```bash
+# Load from .env for development
+export $(cat .env.local | xargs)
+kiln set DATABASE_URL "$DATABASE_URL" --file development
+```
+
+### Secret Rotation
+```bash
+# Update API keys
+kiln set OLD_API_KEY ""  # Clear old value
+kiln set NEW_API_KEY "$(generate-new-api-key)" --file production
+```
+
+## Workflow Examples
+
+### Development Environment Setup
+```bash
+# Create comprehensive development configuration
+cat > dev-config.json << 'EOF'
+{
+  "NODE_ENV": "development",
+  "DATABASE_URL": "postgresql://localhost:5432/myapp_dev",
+  "REDIS_URL": "redis://localhost:6379",
+  "DEBUG_MODE": true,
+  "LOG_LEVEL": "debug",
+  "PORT": 3000,
+  "SESSION_SECRET": "dev-session-secret",
+  "ENABLE_HOT_RELOAD": true
+}
+EOF
+
+kiln set --from-file dev-config.json --file development
+```
+
+### Production Configuration
+```bash
+# Set up production environment with mix of approaches
+kiln set DATABASE_URL --file production
+# Enter value for DATABASE_URL: [hidden - production connection string]
+
+kiln set JWT_SECRET --file production
+# Enter value for JWT_SECRET: [hidden - cryptographic secret]
+
+# Add additional config from JSON
+cat > prod-extras.json << 'EOF'
+{
+  "NODE_ENV": "production",
+  "LOG_LEVEL": "info",
+  "PORT": 80,
+  "CACHE_TTL": 3600,
+  "ENABLE_METRICS": true
+}
+EOF
+
+kiln set --from-file prod-extras.json --file production
+```
+
+### Bulk Environment Migration
+```bash
+# Migrate from multiple sources
+environments=("development" "staging" "production")
+
+for env in "${environments[@]}"; do
+  if [ -f "configs/${env}.json" ]; then
+    echo "Importing $env configuration..."
+    kiln set --from-file "configs/${env}.json" --file "$env"
+  fi
+done
+```
+
+## Best Practices
+
+1. **Use descriptive variable names** that clearly indicate purpose and scope
+2. **Prompt for sensitive values** rather than passing them as command-line arguments
+3. **Organize variables by environment** using meaningful file names
+4. **Validate values** before setting them in production environments
+5. **Document variable purposes** in team documentation or comments
+6. **Rotate secrets regularly** by updating values and rekeying access
+
+## Performance Considerations
+
+### Large Variables
+For individual variables approaching the 1MB limit:
+- Consider storing file paths instead of content
+- Use external secret management for large binary data
+- Split complex configurations into multiple variables
+
+### Frequent Updates
+The `set` command re-encrypts the entire file on each update:
+- Batch multiple updates when possible
+- Use `edit` command for interactive multi-variable updates
+- Consider update frequency in automation scripts
+
+## Next Steps
+
+Continue building your environment management workflow:
+
+<LinkButton href="/commands/get/" variant="primary">Retrieve Variables</LinkButton>
+<LinkButton href="/commands/export/" variant="secondary">Export for Applications</LinkButton>
+<LinkButton href="/workflows/access-management/" variant="minimal">Manage Team Access</LinkButton>
