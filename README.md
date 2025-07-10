@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./docs/logo.svg" alt="Kiln Logo" width="200" height="100">
+  <img src="./docs/src/assets/logo.svg" alt="Kiln Logo" width="200" height="100">
 </div>
 
 ---
@@ -16,11 +16,13 @@
 
 kiln is a secure environment variable management tool that encrypts your sensitive configuration data using [age encryption](https://age-encryption.org/). It provides a simple, offline-first alternative to centralized secret management services, with role-based access control and support for both age and SSH keys, making it perfect for team collaboration and enterprise environments.
 
-## Why kiln Exists?
+![kiln-demo.gid](./docs/public/kiln-demo.gif)
+
+## Why?
 
 Secret management is broken. Secrets get shared over chat, stored in plaintext files, or depend on external services that can fail during critical deployments. They remain vulnerable to anyone with file access, and deployments break when the secret management service is inaccessible.
 
-kiln believes that environment secrets should not depend on external services. They should be encrypted at rest, travel with code, and work offline. kiln solves this by encrypting environment variables into files that can be committed alongside the code. Each team member has their own key and can only decrypt authorized files. kiln can also execute commands by injecting the variables, so applications can access them directly.
+Environment secrets should not depend on external services. They should be encrypted at rest, travel with code, and work offline. kiln solves this by encrypting environment variables into files that can be committed alongside the code. Each team member has their own key and can only decrypt authorized files. kiln can also execute commands by injecting the variables, so applications can access them directly.
 
 No servers to maintain, no dependencies, no vendor lock-in. Secrets stay with code, encrypted and secure.
 
@@ -64,7 +66,7 @@ nix run github:thunderbottom/kiln
 
 ## Quick Start
 
-### 1. Initialize with age Keys
+### 1. Generate a Key and Initialize the Configuration
 
 ```shell
 # Generate a new age encryption key
@@ -83,7 +85,7 @@ $ kiln init config --recipients "alice=$(cat ~/.ssh/id_ed25519.pub)"
 # Set an environment variable with a prompt
 $ kiln set DATABASE_URL
 
-# Or if you are adventurous, set it directly
+# Or set it directly, if you are adventurous
 $ kiln set API_KEY my-secret-key
 
 # Get the value
