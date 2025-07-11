@@ -15,8 +15,9 @@ Download pre-built binaries for your platform from the [releases page](https://g
 <TabItem label="Linux">
 
 ```bash
-# Download the latest release
-curl -L https://github.com/thunderbottom/kiln/releases/latest/download/kiln-linux-amd64 -o kiln
+# Download the latest release, replacing the URL with the latest version from:
+# https://github.com/Thunderbottom/kiln/releases/latest
+curl -L https://github.com/Thunderbottom/kiln/releases/download/v1.0.0/kiln_1.0.0_linux_amd64.tar.gz -o kiln
 
 # Make it executable and install
 chmod +x kiln
@@ -32,11 +33,14 @@ For ARM64 systems, use `kiln-linux-arm64`.
 <TabItem label="macOS">
 
 ```bash
+# Download the latest release, replacing the URL with the latest version from:
+# https://github.com/Thunderbottom/kiln/releases/latest
+
 # Intel Macs
-curl -L https://github.com/thunderbottom/kiln/releases/latest/download/kiln-darwin-amd64 -o kiln
+curl -L https://github.com/Thunderbottom/kiln/releases/download/v1.0.0/kiln_1.0.0_darwin_amd64.tar.gz -o kiln
 
 # Apple Silicon Macs (M1/M2)
-curl -L https://github.com/thunderbottom/kiln/releases/latest/download/kiln-darwin-arm64 -o kiln
+curl -L https://github.com/Thunderbottom/kiln/releases/download/v1.0.0/kiln_1.0.0_darwin_arm64.tar.gz -o kiln
 
 # Make it executable and install
 chmod +x kiln
