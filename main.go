@@ -29,6 +29,7 @@ type CLI struct {
 	Run     commands.RunCmd    `cmd:"" help:"Run command with encrypted environment"`
 	Set     commands.SetCmd    `cmd:"" help:"Set an environment variable"`
 	Get     commands.GetCmd    `cmd:"" help:"Get an environment variable"`
+	Apply   commands.ApplyCmd  `cmd:"" help:"Apply variables to template files"`
 	Rekey   commands.RekeyCmd  `cmd:"" help:"Rotate encryption keys"`
 	Info    commands.InfoCmd   `cmd:"" help:"Show project and file information"`
 	Version kong.VersionFlag   `help:"Show version"`
