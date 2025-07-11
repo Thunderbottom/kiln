@@ -1,0 +1,341 @@
+---
+title: apply
+description: Apply encrypted environment variables to template files with secure variable substitution.
+---
+
+import { Aside } from '@astrojs/starlight/components';
+
+Securely apply encrypted environment variables to template files, eliminating the need for plaintext secrets or unsafe tools like `envsubst`.
+
+## Synopsis
+
+```bash
+kiln apply -f <file> <template-file> [options]
+```
+
+The `apply` command performs variable substitution in template files using encrypted kiln variables, ensuring secrets never appear in plaintext during the templating process.
+
+## Arguments
+
+- `<template-file>`: Path to the template file containing variable placeholders (required)
+
+## Options
+
+- `--file`, `-f`: Environment file from configuration (required)
+- `--output`, `-o`: Output file path (default: stdout)
+- `--strict`: Fail if template variables are not found in kiln environment
+- `--left-delimiter`: Custom left delimiter for variables (default: `$` or `${`)
+- `--right-delimiter`: Custom right delimiter for variables (default: empty or `}`)
+
+## Examples
+
+### Basic Usage
+```bash
+# Apply variables to nginx config, output to stdout
+kiln apply -f production nginx.conf.template
+
+# Apply and save to file
+kiln apply -f staging docker-compose.yml.template -o docker-compose.yml
+```
+
+### Strict Mode
+```bash
+# Fail if any template variables are missing
+kiln apply -f production --strict k8s-deployment.yaml.template
+```
+
+### Custom Delimiters
+```bash
+# Use custom delimiters for templates with [[ ]] syntax
+kiln apply -f development --left-delimiter "[[" --right-delimiter "]]" ansible.template
+
+# Use different delimiters
+kiln apply -f production --left-delimiter "{{" --right-delimiter "}}" config.template
+```
+
+### Pipeline Integration
+```bash
+# Apply and pipe to Docker
+kiln apply -f production docker-compose.yml.template | docker-compose -f - up
+
+# Apply and deploy to Kubernetes
+kiln apply -f staging k8s-manifest.yaml.template | kubectl apply -f -
+```
+
+## Variable Patterns
+
+<Aside type="note">
+The command supports different variable patterns depending on delimiter configuration.
+</Aside>
+
+### Default Patterns
+
+When no custom delimiters are specified, standard shell-compatible patterns are used:
+
+```bash
+# Braced variables (recommended)
+database_url=${DATABASE_URL}
+api_key=${API_KEY}
+port=${PORT}
+
+# Simple variables (use with caution)
+home_dir=$HOME
+user=$USER
+```
+
+**Validation rules for default patterns:**
+- `${VAR}`: Strict shell syntax, no whitespace allowed
+- `$VAR`: Direct variable reference, no whitespace
+
+### Custom Delimiter Patterns
+
+When custom delimiters are specified, flexible spacing is allowed:
+
+```bash
+# Template with custom delimiters
+database=[[DATABASE_URL]]
+api=[[ API_KEY ]]
+port=[[ PORT]]
+debug=[[  DEBUG_MODE  ]]
+```
+
+**Custom delimiter features:**
+- Whitespace tolerance: `[[ VAR ]]`, `[[VAR]]`, `[[ VAR]]` all work
+- Any delimiter pair: `{{ }}`, `<% %>`, `@@ @@`, etc.
+- Escape sequences handled automatically
+
+## Template Formats
+
+### Configuration Files
+```bash
+# app.conf.template
+[database]
+url = ${DATABASE_URL}
+pool_size = ${DB_POOL_SIZE}
+
+[api]
+key = ${API_KEY}
+timeout = ${API_TIMEOUT}
+```
+
+### Docker Compose
+```yaml
+# docker-compose.yml.template
+version: '3.8'
+services:
+  app:
+    image: myapp:latest
+    environment:
+      - DATABASE_URL=${DATABASE_URL}
+      - API_KEY=${API_KEY}
+      - DEBUG=${DEBUG_MODE}
+    ports:
+      - "${PORT}:8080"
+  
+  redis:
+    image: redis:7
+    command: redis-server --requirepass ${REDIS_PASSWORD}
+```
+
+### Kubernetes Manifests
+```yaml
+# deployment.yaml.template
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: myapp
+spec:
+  template:
+    spec:
+      containers:
+      - name: app
+        image: myapp:${IMAGE_TAG}
+        env:
+        - name: DATABASE_URL
+          value: "${DATABASE_URL}"
+        - name: API_KEY
+          value: "${API_KEY}"
+```
+
+### Nginx Configuration
+```nginx
+# nginx.conf.template
+server {
+    listen ${PORT};
+    server_name ${DOMAIN};
+    
+    location / {
+        proxy_pass ${BACKEND_URL};
+        proxy_set_header Authorization "Bearer ${API_TOKEN}";
+    }
+    
+    ssl_certificate ${SSL_CERT_PATH};
+    ssl_certificate_key ${SSL_KEY_PATH};
+}
+```
+
+### Shell Scripts
+```bash
+#!/bin/bash
+# deploy.sh.template
+
+export DATABASE_URL="${DATABASE_URL}"
+export API_KEY="${API_KEY}"
+export LOG_LEVEL="${LOG_LEVEL}"
+
+echo "Deploying to ${ENVIRONMENT}"
+./app --port=${PORT} --workers=${WORKER_COUNT}
+```
+
+## Security Features
+
+### Memory Safety
+- Template content and variables are wiped from memory after processing
+- No sensitive data persists in process memory
+- Secure cleanup on interruption or error
+
+### Input Validation
+- Template file path validation prevents directory traversal
+- Output path validation with permission checks
+- Variable name validation follows standard conventions
+- Template content size limits prevent memory exhaustion
+
+### Access Control
+- Respects existing file-level access controls from `kiln.toml`
+- Validates user has read access to specified environment file
+- Validates write permissions for output file destination
+
+## Error Handling
+
+### Missing Variables
+```bash
+# Non-strict mode (default)
+kiln apply -f production template.conf
+# Missing variables are left unchanged: ${MISSING_VAR}
+
+# Strict mode
+kiln apply -f production --strict template.conf
+# Error: missing variables: [MISSING_VAR, ANOTHER_MISSING]
+```
+
+### File Access Errors
+```bash
+# Template file not readable
+kiln apply -f production /etc/shadow
+# Error: cannot read template file: permission denied
+
+# Output directory not writable
+kiln apply -f production template.conf -o /etc/output.conf
+# Error: cannot write output file: permission denied
+```
+
+### Invalid Delimiters
+```bash
+# Mismatched delimiters
+kiln apply -f production --left-delimiter "[[" template.conf
+# Error: both left and right delimiters must be specified together
+```
+
+## Integration Patterns
+
+### Development Workflow
+```bash
+# Generate local configuration
+kiln apply -f development app.conf.template -o config/local.conf
+
+# Start application with generated config
+./app --config config/local.conf
+```
+
+### CI/CD Deployment
+```bash
+#!/bin/bash
+# deploy.sh
+
+# Validate template access
+if ! kiln info --file production --verify; then
+    echo "Cannot access production environment" >&2
+    exit 1
+fi
+
+# Generate deployment manifests
+kiln apply -f production k8s-deployment.yaml.template -o deployment.yaml
+kiln apply -f production k8s-service.yaml.template -o service.yaml
+
+# Deploy to cluster
+kubectl apply -f deployment.yaml -f service.yaml
+```
+
+### Configuration Management
+```bash
+# Generate configs for multiple environments
+for env in development staging production; do
+    kiln apply -f "$env" nginx.conf.template -o "configs/nginx-$env.conf"
+done
+
+# Validate generated configs
+for config in configs/*.conf; do
+    nginx -t -c "$config"
+done
+```
+
+### Docker Integration
+```bash
+# Generate docker-compose with secrets
+kiln apply -f production docker-compose.yml.template -o docker-compose.prod.yml
+
+# Deploy stack
+docker-compose -f docker-compose.prod.yml up -d
+
+# Clean up generated file
+rm docker-compose.prod.yml
+```
+
+## Best Practices
+
+### Template Design
+1. **Use descriptive variable names** that clearly indicate their purpose
+2. **Group related variables** logically in templates
+3. **Include comments** to document expected variable types and formats
+4. **Use braced syntax** `${VAR}` for clarity and safety
+
+### Security Guidelines
+1. **Never commit generated files** containing secrets to version control
+2. **Use strict mode** in production to catch missing variables early
+3. **Validate output** before deploying to ensure all substitutions occurred
+4. **Clean up temporary files** containing sensitive data
+
+### Error Prevention
+```bash
+# Check template variables before applying
+grep -oP '\$\{[A-Za-z_][A-Za-z0-9_]*\}' template.conf | sort -u
+
+# Validate all required variables exist
+required_vars=("DATABASE_URL" "API_KEY" "PORT")
+for var in "${required_vars[@]}"; do
+    if ! kiln get "$var" --file production >/dev/null 2>&1; then
+        echo "Missing required variable: $var" >&2
+        exit 1
+    fi
+done
+
+# Apply with validation
+kiln apply -f production --strict template.conf -o output.conf
+```
+
+## Comparison with Alternatives
+
+### vs. `envsubst`
+- **Security**: kiln keeps secrets encrypted; envsubst requires plaintext environment
+- **Access Control**: kiln enforces file-level permissions; envsubst uses process environment
+- **Integration**: Both support standard shell syntax; kiln adds custom delimiters
+
+### vs. Template Engines
+- **Simplicity**: kiln uses simple variable substitution; template engines add complexity
+- **Security**: kiln focuses on secret management; template engines focus on logic
+- **Performance**: kiln is optimized for config generation; template engines support programming constructs
+
+### vs. Manual Editing
+- **Automation**: kiln enables scriptable configuration generation
+- **Consistency**: Reduces human error in configuration management
+- **Security**: Eliminates need to handle plaintext secrets during deployment

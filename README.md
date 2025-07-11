@@ -120,6 +120,9 @@ $ eval $(kiln export)
 # Or to a file for your application to use
 $ kiln export --format json > config.json
 
+# Or apply variables directly to configuration templates
+$ kiln apply --file production nginx.conf.template -o nginx.conf
+
 # Or better, run the application with the secrets injected
 $ kiln run -- npm start
 $ kiln run --file production -- ./deploy.sh

@@ -44,6 +44,7 @@ export default defineConfig({
                       { label: 'get', slug: 'commands/get' },
                       { label: 'edit', slug: 'commands/edit' },
                       { label: 'export', slug: 'commands/export' },
+                      { label: 'apply', slug: 'commands/apply' },
                       { label: 'run', slug: 'commands/run' },
                       { label: 'rekey', slug: 'commands/rekey' },
                       { label: 'info', slug: 'commands/info' },

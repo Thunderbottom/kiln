@@ -19,11 +19,11 @@ Available for all commands:
 | `--help` | `-h` | Show help information | - |
 | `--version` | - | Show version information | - |
 
-## init
+## `init`
 
 Initialize new kiln projects.
 
-### init key
+### `init key`
 
 Generate encryption key pairs.
 
@@ -37,7 +37,7 @@ kiln init key [--path PATH] [--encrypt] [--force]
 | `--encrypt` | Protect with passphrase | `false` |
 | `--force` | Overwrite existing files | `false` |
 
-### init config
+### `init config`
 
 Create configuration files.
 
@@ -51,7 +51,7 @@ kiln init config [--path PATH] [--recipients NAME=KEY...] [--force]
 | `--recipients` | Named recipients (repeatable) | - |
 | `--force` | Overwrite existing config | `false` |
 
-## set
+## `set`
 
 Add or update environment variables.
 
@@ -70,7 +70,7 @@ kiln set <name> [value] [--file FILE]
 Variable names must match pattern `^[a-zA-Z_][a-zA-Z0-9_]*$` (letters, numbers, underscores only).
 </Aside>
 
-## get
+## `get`
 
 Retrieve environment variables.
 
@@ -84,7 +84,7 @@ kiln get <name> [--file FILE] [--format FORMAT]
 | `--file`, `-f` | Environment file | - | `default` |
 | `--format` | Output format | `value`, `json` | `value` |
 
-## edit
+## `edit`
 
 Interactive environment editing.
 
@@ -97,7 +97,7 @@ kiln edit [--file FILE] [--editor EDITOR]
 | `--file`, `-f` | Environment file | `default` |
 | `--editor` | Editor command | `$EDITOR` |
 
-## export
+## `export`
 
 Output environment variables.
 
@@ -110,7 +110,23 @@ kiln export [--file FILE] [--format FORMAT]
 | `--file`, `-f` | Environment file | - | `default` |
 | `--format` | Output format | `shell`, `json`, `yaml` | `shell` |
 
-## run
+### `apply`
+
+Apply variables directly to template files
+
+```bash
+kiln apply [--file FILE] [TEMPLATE]
+```
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--file`, `-f` | Environment file | `default` |
+| `--output`, `-o` | Output file Path | `stdout` |
+| `--strict` | Fail if template variables are not found | `-` |
+| `--left-delimiter` | Left delimiter to use for the template | `${` or `$` |
+| `--right-delimiter` | Right delimiter to use for the template | `}` or empty |
+
+## `run`
 
 Execute commands with environment.
 
@@ -130,7 +146,7 @@ kiln run [OPTIONS] -- <command> [args...]
 The `--` separator is required to separate kiln options from the arguments of the command being executed.
 </Aside>
 
-## rekey
+## `rekey`
 
 Add recipients and rotate keys.
 
@@ -144,7 +160,7 @@ kiln rekey --file FILE --add-recipient NAME=KEY [OPTIONS]
 | `--add-recipient` | Named recipient (repeatable) | Yes |
 | `--force` | Skip confirmations | No |
 
-## info
+## `info`
 
 Display file status and verification.
 
