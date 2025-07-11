@@ -9,7 +9,7 @@ Technical specification of all file formats used by kiln for configuration, keys
 
 ## Configuration Format (TOML)
 
-Kiln uses TOML for human-readable configuration with strong typing and validation.
+kiln uses TOML for human-readable configuration with strong typing and validation.
 
 ### File Structure
 
@@ -31,7 +31,7 @@ access = ["recipient-or-group"]
 ### TOML Compliance
 
 <Aside type="note">
-Kiln follows TOML v1.0.0 specification with strict parsing and comprehensive error reporting.
+kiln follows TOML v1.0.0 specification with strict parsing and comprehensive error reporting.
 </Aside>
 
 - **Version**: TOML v1.0.0 compliant
@@ -101,7 +101,7 @@ MIIEpAIBAAKCAQEA1234567890abcdef...
 ### File Permissions
 
 <Aside type="caution">
-Private key files must have restrictive permissions (0600) to prevent unauthorized access. Kiln enforces this requirement.
+Private key files must have restrictive permissions (0600) to prevent unauthorized access. kiln enforces this requirement.
 </Aside>
 
 **Required permissions:**
@@ -319,10 +319,10 @@ cat ~/.ssh/id_ed25519.pub
 ### Age Tool Compatibility
 
 <Aside type="note">
-Kiln's encrypted files are fully compatible with the standard age tool, allowing for emergency access and interoperability.
+kiln's encrypted files are fully compatible with the standard age tool, allowing for emergency access and interoperability.
 </Aside>
 
-Kiln-encrypted files can be decrypted with standard age:
+kiln-encrypted files can be decrypted with standard age:
 
 ```bash
 # Decrypt with age tool
@@ -340,7 +340,7 @@ For SSH keys, kiln can integrate with SSH agent:
 # Add key to agent
 ssh-add ~/.ssh/kiln_key
 
-# Kiln will use agent if available
+# kiln will use agent if available
 kiln get DATABASE_URL
 ```
 

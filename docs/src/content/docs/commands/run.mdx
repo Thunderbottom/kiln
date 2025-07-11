@@ -81,13 +81,13 @@ The command inherits the current environment and adds/overrides with decrypted v
 export NODE_ENV=development
 export PATH=/usr/bin:/bin
 
-# Kiln adds decrypted variables
+# kiln adds decrypted variables
 kiln run -- node -e 'console.log(process.env)'
 # Output includes: NODE_ENV, PATH, DATABASE_URL, API_KEY, etc.
 ```
 
 ### Variable Precedence
-1. Kiln decrypted variables (highest priority)
+1. kiln decrypted variables (highest priority)
 2. Existing environment variables
 3. System default variables
 
@@ -161,7 +161,7 @@ echo $?  # 42 (custom exit codes preserved)
 ### Interrupt Handling
 - `Ctrl+C` (SIGINT) is forwarded to the running command
 - Graceful shutdown allows command cleanup
-- Kiln waits for command termination before exiting
+- kiln waits for command termination before exiting
 
 ### Process Group Management
 - Commands run in their own process group
