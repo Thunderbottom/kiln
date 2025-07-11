@@ -21,26 +21,32 @@ export const { getStaticPaths, GET } = OGImageRoute({
       title: page.data.title,
       description: page.data.description,
       logo: {
-        path: "./public/logo.png",
+        path: "./src/pages/open-graph/images/logo.png",
         size: [300],
       },
+      border: { width: 32, side: 'inline-start' },
+      padding: 80,
       bgImage: {
-        path: "./public/og-background.png",
+        path: "./src/pages/open-graph/images/og-background.png",
       },
       font: {
         title: {
           families: ["Hanken Grotesk"],
           color: [255, 255, 255],
           size: 72,
-          weight: "bold"
+          weight: "bold",
         },
         description: {
           families: ["Hanken Grotesk"],
-          color: [200, 200, 200],
-          size: 32,
+          color: [191, 193, 201],
+          size: 38,
         },
       },
-      fonts: ["./public/fonts/HankenGrotesk-Regular.ttf"],
+      fonts: [
+        "./src/pages/open-graph/fonts/HankenGrotesk-Regular.ttf",
+        "./src/pages/open-graph/fonts/HankenGrotesk-Bold.ttf",
+        "./src/pages/open-graph/fonts/HankenGrotesk-Light.ttf",
+      ],
     }
   },
 })

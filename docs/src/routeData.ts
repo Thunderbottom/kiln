@@ -4,7 +4,7 @@ export const onRequest = defineRouteMiddleware((context) => {
   // Get the URL of the generated image for the current page using its ID and
   // append the `.png` file extension.
   const ogImageUrl = new URL(
-    `/og/${context.locals.starlightRoute.id || 'index'}.png`,
+    `/open-graph/${context.locals.starlightRoute.id || 'index'}.png`,
     context.site,
   )
 
