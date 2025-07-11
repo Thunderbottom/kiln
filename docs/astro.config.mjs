@@ -74,7 +74,7 @@ export default defineConfig({
       }),
 	],
 
-	site: "http://localhost:4321",
+	site: "https://kiln.sh",
 
   vite: {
     plugins: [tailwindcss()],
