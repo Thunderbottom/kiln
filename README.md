@@ -9,6 +9,7 @@
 [![kiln Documentation](https://img.shields.io/badge/kiln-documentation-blue)](https://kiln.sh)
 [![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](https://opensource.org/licenses/MIT)
 [![Latest Release](https://img.shields.io/github/v/release/thunderbottom/kiln)](https://github.com/thunderbottom/kiln/releases)
+[![Made at Zerodha Tech](https://zerodha.tech/static/images/github-badge.svg)](https://zerodha.tech)
 
 </div>
 
