@@ -21,13 +21,13 @@ export const { getStaticPaths, GET } = OGImageRoute({
       title: page.data.title,
       description: page.data.description,
       logo: {
-        path: "./src/pages/open-graph/images/logo.png",
+        path: "./src/pages/open-graph/_images/logo.png",
         size: [300],
       },
       border: { width: 32, side: 'inline-start' },
       padding: 80,
       bgImage: {
-        path: "./src/pages/open-graph/images/og-background.png",
+        path: "./src/pages/open-graph/_images/og-background.png",
       },
       font: {
         title: {
@@ -43,9 +43,9 @@ export const { getStaticPaths, GET } = OGImageRoute({
         },
       },
       fonts: [
-        "./src/pages/open-graph/fonts/HankenGrotesk-Regular.ttf",
-        "./src/pages/open-graph/fonts/HankenGrotesk-Bold.ttf",
-        "./src/pages/open-graph/fonts/HankenGrotesk-Light.ttf",
+        "./src/pages/open-graph/_fonts/HankenGrotesk-Regular.ttf",
+        "./src/pages/open-graph/_fonts/HankenGrotesk-Bold.ttf",
+        "./src/pages/open-graph/_fonts/HankenGrotesk-Light.ttf",
       ],
     }
   },
