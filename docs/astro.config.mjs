@@ -9,6 +9,7 @@ export default defineConfig({
   integrations: [
       starlight({
           title: 'kiln',
+          routeMiddleware: './src/routeData.ts',
           logo: {
               light: './src/assets/logo.svg',
               dark: './src/assets/logo-dark.svg',

@@ -5,7 +5,7 @@
 @import 'tailwindcss/utilities.css' layer(utilities);
 
 @theme {
-  --font-sans: 'Hanken Grotesk', sans--serif;
+  --font-sans: 'Hanken Grotesk', sans-serif;
   --font-mono: 'IBM Plex Mono';
 
   --color-accent-50: var(--color-cyan-50);
