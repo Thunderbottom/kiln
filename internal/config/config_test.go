@@ -33,36 +33,47 @@ func TestNewConfig(t *testing.T) {
 
 func TestConfigSaveLoad(t *testing.T) {
 	tmpDir := createTempDir(t)
-	configPath := filepath.Join(tmpDir, "test.toml")
 
-	// Create test config
 	cfg := NewConfig()
-	cfg.AddRecipient("alice", "age1234567890abcdef")
+	cfg.AddRecipient("alice", "age1234...")
+
+	defaultPath := ".kiln.env"
+	prodPath := ".kiln.prod.env"
+
+	cfg.Files["default"] = FileConfig{
+		Filename: defaultPath,
+		Access:   []string{"*"},
+	}
 	cfg.Files["production"] = FileConfig{
-		Filename: prodEnv,
+		Filename: prodPath,
 		Access:   []string{"alice"},
 	}
 
-	// Save config
+	configPath := filepath.Join(tmpDir, "kiln.toml")
+
 	err := cfg.Save(configPath)
 	if err != nil {
 		t.Fatalf("Save failed: %v", err)
 	}
 
-	// Load config
-	loaded, err := Load(configPath)
+	loadedCfg, err := Load(configPath)
 	if err != nil {
 		t.Fatalf("Load failed: %v", err)
 	}
 
-	// Verify recipients
-	if !reflect.DeepEqual(loaded.Recipients, cfg.Recipients) {
-		t.Errorf("Recipients mismatch: expected %v, got %v", cfg.Recipients, loaded.Recipients)
+	expectedFiles := map[string]FileConfig{
+		"default": {
+			Filename: filepath.Join(tmpDir, defaultPath),
+			Access:   []string{"*"},
+		},
+		"production": {
+			Filename: filepath.Join(tmpDir, prodPath),
+			Access:   []string{"alice"},
+		},
 	}
 
-	// Verify files
-	if !reflect.DeepEqual(loaded.Files, cfg.Files) {
-		t.Errorf("Files mismatch: expected %v, got %v", cfg.Files, loaded.Files)
+	if !reflect.DeepEqual(loadedCfg.Files, expectedFiles) {
+		t.Errorf("Files mismatch: expected %v, got %v", expectedFiles, loadedCfg.Files)
 	}
 }
 
