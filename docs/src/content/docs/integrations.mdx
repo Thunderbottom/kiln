@@ -1,0 +1,34 @@
+---
+title: Integrations
+description: Third-party integrations and plugins for kiln encrypted environment variables.
+---
+
+import { Card, CardGrid } from '@astrojs/starlight/components';
+
+Kiln can be integrated with tools and libraries to provide encrypted environment variable support across different ecosystems.
+
+## Configuration Management
+
+<CardGrid>
+  <Card title="koanf Provider" icon="star">
+    **Go Configuration Library**
+
+    Load encrypted environment variables directly into [koanf](https://github.com/knadh/koanf) configuration with full transformation support.
+
+    ```go
+    import "github.com/knadh/koanf/providers/kiln"
+
+    k.Load(kiln.Provider("kiln.toml", "", "production", kiln.Opt{
+        Prefix: "API_",
+        TransformFunc: transformKeys,
+    }), nil)
+    ```
+
+    [View Documentation →](https://github.com/knadh/koanf/blob/master/providers/kiln/kiln.go)
+  </Card>
+</CardGrid>
+
+---
+
+To add your own integration to this list, send a [pull request](https://github.com/thunderbottom/kiln).
+

@@ -1,0 +1,335 @@
+---
+title: Go Library
+description: Using kiln as a Go library for programmatic access to encrypted environment variables.
+---
+
+import { Aside, Code } from '@astrojs/starlight/components';
+
+The `pkg/kiln` package provides a Go library for integrating kiln's encrypted environment variable functionality directly into your applications.
+
+## Installation
+
+```bash
+go get github.com/thunderbottom/kiln/pkg/kiln
+```
+
+## Basic Usage
+
+### Loading Configuration
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/thunderbottom/kiln/pkg/kiln"
+)
+
+func main() {
+    // Load kiln.toml configuration
+    cfg, err := kiln.LoadConfig("kiln.toml")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    fmt.Printf("Loaded %d recipients\n", len(cfg.Recipients))
+}
+```
+
+### Identity Management
+
+```go
+// Load identity from specific key file
+identity, err := kiln.NewIdentityFromKey("/path/to/key.key")
+if err != nil {
+    log.Fatal(err)
+}
+defer identity.Cleanup() // Always cleanup for security
+
+// Auto-discover key from standard locations
+identity, err := kiln.DiscoverAndLoadIdentity()
+if err != nil {
+    log.Fatal(err)
+}
+defer identity.Cleanup()
+```
+
+### Reading Environment Variables
+
+#### Single Variable
+
+```go
+// Get one environment variable
+value, cleanup, err := kiln.GetEnvironmentVar(identity, cfg, "production", "DATABASE_URL")
+if err != nil {
+    log.Fatal(err)
+}
+defer cleanup() // Secure memory cleanup
+
+fmt.Println("Database URL:", string(value))
+```
+
+#### All Variables
+
+```go
+// Get all environment variables from a file
+vars, cleanup, err := kiln.GetAllEnvironmentVars(identity, cfg, "production")
+if err != nil {
+    log.Fatal(err)
+}
+defer cleanup()
+
+for key, value := range vars {
+    fmt.Printf("%s=%s\n", key, string(value))
+}
+```
+
+### Setting Variables
+
+```go
+// Set a single variable
+err := kiln.SetEnvironmentVar(identity, cfg, "development", "API_KEY", []byte("secret-key"))
+if err != nil {
+    log.Fatal(err)
+}
+
+// Set multiple variables
+vars := map[string][]byte{
+    "DATABASE_URL": []byte("postgres://localhost/myapp"),
+    "API_KEY":      []byte("secret-api-key"),
+    "DEBUG":        []byte("true"),
+}
+
+err = kiln.SetMultipleEnvironmentVars(identity, cfg, "development", vars)
+if err != nil {
+    log.Fatal(err)
+}
+```
+
+## Advanced Usage
+
+### Key Discovery
+
+```go
+// Discover private key from standard locations
+keyPath, err := kiln.DiscoverPrivateKey()
+if err != nil {
+    log.Fatal("No compatible private key found:", err)
+}
+
+fmt.Println("Using key:", keyPath)
+```
+
+### Access Control Validation
+
+```go
+// Check if identity can access a specific file
+canAccess := kiln.ValidateAccess(identity, cfg, "production")
+if !canAccess {
+    log.Fatal("Access denied to production environment")
+}
+```
+
+### Configuration Validation
+
+```go
+// Validate configuration file
+if err := kiln.ValidateConfig(cfg); err != nil {
+    log.Fatal("Invalid configuration:", err)
+}
+
+// Check specific file configuration
+fileConfig, exists := cfg.Files["production"]
+if !exists {
+    log.Fatal("Production environment not configured")
+}
+```
+
+## Integration Patterns
+
+### Application Configuration
+
+```go
+type AppConfig struct {
+    DatabaseURL string
+    APIKey      string
+    Debug       bool
+}
+
+func LoadConfig(env string) (*AppConfig, error) {
+    cfg, err := kiln.LoadConfig("kiln.toml")
+    if err != nil {
+        return nil, err
+    }
+
+    identity, err := kiln.DiscoverAndLoadIdentity()
+    if err != nil {
+        return nil, err
+    }
+    defer identity.Cleanup()
+
+    vars, cleanup, err := kiln.GetAllEnvironmentVars(identity, cfg, env)
+    if err != nil {
+        return nil, err
+    }
+    defer cleanup()
+
+    return &AppConfig{
+        DatabaseURL: string(vars["DATABASE_URL"]),
+        APIKey:      string(vars["API_KEY"]),
+        Debug:       string(vars["DEBUG"]) == "true",
+    }, nil
+}
+```
+
+### HTTP Server with Encrypted Config
+
+```go
+package main
+
+import (
+    "log"
+    "net/http"
+    "os"
+
+    "github.com/thunderbottom/kiln/pkg/kiln"
+)
+
+func main() {
+    cfg, err := kiln.LoadConfig("kiln.toml")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    identity, err := kiln.DiscoverAndLoadIdentity()
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer identity.Cleanup()
+
+    // Get server configuration
+    vars, cleanup, err := kiln.GetAllEnvironmentVars(identity, cfg, "production")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer cleanup()
+
+    port := string(vars["PORT"])
+    if port == "" {
+        port = "8080"
+    }
+
+    http.HandleFunc("/health", func(w http.ResponseWriter, r *http.Request) {
+        w.WriteHeader(http.StatusOK)
+        w.Write([]byte("OK"))
+    })
+
+    log.Printf("Server starting on port %s", port)
+    log.Fatal(http.ListenAndServe(":"+port, nil))
+}
+```
+
+### CI/CD Integration
+
+```go
+func deployWithSecrets(environment string) error {
+    cfg, err := kiln.LoadConfig("deploy/kiln.toml")
+    if err != nil {
+        return err
+    }
+
+    // Use deploy key in CI
+    identity, err := kiln.NewIdentityFromKey("/secrets/deploy.key")
+    if err != nil {
+        return err
+    }
+    defer identity.Cleanup()
+
+    vars, cleanup, err := kiln.GetAllEnvironmentVars(identity, cfg, environment)
+    if err != nil {
+        return err
+    }
+    defer cleanup()
+
+    // Set environment variables for deployment
+    for key, value := range vars {
+        os.Setenv(key, string(value))
+    }
+
+    // Run deployment command
+    return runDeployment()
+}
+```
+
+## Security Considerations
+
+<Aside type="caution">
+Always call `defer cleanup()` when working with decrypted values to ensure secure memory cleanup.
+</Aside>
+
+### Memory Management
+
+```go
+// Correct: Always cleanup
+value, cleanup, err := kiln.GetEnvironmentVar(identity, cfg, "prod", "SECRET")
+if err != nil {
+    return err
+}
+defer cleanup() // Secure memory wipe
+
+// Wrong: No cleanup
+value, _, err := kiln.GetEnvironmentVar(identity, cfg, "prod", "SECRET")
+// Memory remains unwiped!
+```
+
+### Identity Lifecycle
+
+```go
+// Correct: Cleanup identity
+identity, err := kiln.NewIdentityFromKey("key.key")
+if err != nil {
+    return err
+}
+defer identity.Cleanup()
+
+// Wrong: No cleanup
+identity, _ := kiln.NewIdentityFromKey("key.key")
+// Private key remains in memory!
+```
+
+## API Reference
+
+### Core Functions
+
+| Function | Description |
+|----------|-------------|
+| `LoadConfig(path string) (*Config, error)` | Load `kiln.toml` configuration |
+| `NewIdentityFromKey(keyPath string) (*Identity, error)` | Load identity from key file |
+| `DiscoverPrivateKey() (string, error)` | Find compatible private key |
+| `GetEnvironmentVar(identity *Identity, cfg *Config, file, key string) ([]byte, func(), error)` | Get single variable |
+| `GetAllEnvironmentVars(identity *Identity, cfg *Config, file string) (map[string][]byte, func(), error)` | Get all variables |
+| `SetEnvironmentVar(identity *Identity, cfg *Config, file, key string, value []byte) error` | Set single variable |
+| `SetMultipleEnvironmentVars(identity *Identity, cfg *Config, file string, vars map[string][]byte) error` | Set multiple variables |
+
+### Types
+
+```go
+type Config struct {
+    Recipients map[string]string
+    Groups     map[string][]string
+    Files      map[string]FileConfig
+}
+
+type FileConfig struct {
+    Filename string
+    Access   []string
+}
+
+type Identity struct {
+    // Private fields - use provided methods
+}
+```
+
+For complete API documentation, see the [Go package documentation](https://pkg.go.dev/github.com/thunderbottom/kiln/pkg/kiln).

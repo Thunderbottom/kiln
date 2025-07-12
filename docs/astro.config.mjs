@@ -68,6 +68,8 @@ export default defineConfig({
                       { label: 'Exit Codes', slug: 'reference/exit-codes' },
                   ],
               },
+              { label: 'Go Library', slug: 'library' },
+              { label: 'Integrations', slug: 'integrations' },
               { label: 'FAQs', slug: 'faq' },
           ],
           customCss: [
