@@ -1,0 +1,85 @@
+---
+import { Steps, Tabs, TabItem, Code } from '@astrojs/starlight/components';
+
+let release;
+try {
+  const response = await fetch('https://api.github.com/repos/Thunderbottom/kiln/releases/latest');
+  release = await response.json();
+} catch {
+  release = { tag_name: 'v1.0.3', assets: [] };
+}
+
+const version = release.tag_name.startsWith('v') ? release.tag_name.slice(1) : release.tag_name;
+
+function getDownloadUrl(platform) {
+  const ext = platform.includes('windows') ? '.zip' : '.tar.gz';
+  const filename = `kiln_${version}_${platform}${ext}`;
+  const asset = release.assets?.find(a => a.name === filename);
+  return asset?.browser_download_url || `https://github.com/Thunderbottom/kiln/releases/latest`;
+}
+
+const platforms = {
+  linux: [
+    { id: 'linux_amd64', name: 'AMD64', arch: 'x86_64' },
+    { id: 'linux_arm64', name: 'ARM64', arch: 'aarch64' }
+  ],
+  macos: [
+    { id: 'darwin_arm64', name: 'Apple Silicon (M1/M2/M3)', arch: 'arm64' },
+    { id: 'darwin_amd64', name: 'Intel', arch: 'x86_64' }
+  ],
+  windows: [
+    { id: 'windows_amd64', name: 'AMD64', arch: 'x86_64' }
+  ]
+};
+
+function generateInstallCode(platform) {
+  return `# Download and extract the latest release
+curl -L ${getDownloadUrl(platform.id)}
+tar xzf kiln_${version}_${platform.id}.tar.gz
+
+# Install to system PATH
+chmod +x kiln
+sudo mv kiln /usr/local/bin/
+
+# Verify installation
+kiln --version`;
+}
+---
+
+<Tabs>
+<TabItem label="Linux">
+{platforms.linux.map(platform => (
+  <div>
+    <h4>{platform.name}</h4>
+    <Code code={generateInstallCode(platform)} lang="bash" />
+  </div>
+))}
+</TabItem>
+
+<TabItem label="macOS">
+{platforms.macos.map(platform => (
+  <div>
+    <h4>{platform.name}</h4>
+    <Code code={generateInstallCode(platform)} lang="bash" />
+  </div>
+))}
+</TabItem>
+
+<TabItem label="Windows">
+<Steps>
+<ol>
+<li>Download the latest release: <a href={getDownloadUrl('windows_amd64')}>kiln_{version}_windows_amd64.tar.gz</a></li>
+<li>Extract <code>kiln.exe</code> using Windows Explorer or 7-Zip</li>
+<li>Place it in a directory in your <code>PATH</code> (e.g., <code>C:\Program Files\kiln\</code>)</li>
+<li>Open Command Prompt or PowerShell and run <code>kiln --version</code></li>
+</ol>
+</Steps>
+
+<p><strong>Add to PATH:</strong></p>
+<ul>
+<li>Windows 10/11: Settings → System → About → Advanced system settings</li>
+<li>Click "Environment Variables" → Edit PATH variable</li>
+<li>Add the directory containing <code>kiln.exe</code></li>
+</ul>
+</TabItem>
+</Tabs>

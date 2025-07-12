@@ -4,6 +4,7 @@ description: Install kiln on your system using pre-built binaries or compile fro
 ---
 
 import { Tabs, TabItem, LinkCard, LinkButton } from '@astrojs/starlight/components';
+import DownloadLinks from '../../components/DownloadLinks.astro';
 
 kiln is distributed as a single binary with no external dependencies. Choose your preferred installation method below.
 
@@ -11,61 +12,7 @@ kiln is distributed as a single binary with no external dependencies. Choose you
 
 Download pre-built binaries for your platform from the [releases page](https://github.com/thunderbottom/kiln/releases).
 
-<Tabs>
-<TabItem label="Linux">
-
-```bash
-# Download the latest release, replacing the URL with the latest version from:
-# https://github.com/Thunderbottom/kiln/releases/latest
-curl -L https://github.com/Thunderbottom/kiln/releases/download/v1.0.0/kiln_1.0.0_linux_amd64.tar.gz
-
-tar xzvf kiln_1.0.0_linux_amd64.tar.gz
-
-# Make it executable and install
-chmod +x kiln
-sudo mv kiln /usr/local/bin/
-
-# Verify installation
-kiln --version
-```
-
-For ARM64 systems, use `kiln-linux-arm64`.
-
-</TabItem>
-<TabItem label="macOS">
-
-```bash
-# Download the latest release, replacing the URL with the latest version from:
-# https://github.com/Thunderbottom/kiln/releases/latest
-
-# Intel Macs
-curl -L https://github.com/Thunderbottom/kiln/releases/download/v1.0.0/kiln_1.0.0_darwin_amd64.tar.gz
-
-tar xzvf kiln_1.0.0_darwin_amd64.tar.gz
-
-# Apple Silicon Macs (M1/M2)
-curl -L https://github.com/Thunderbottom/kiln/releases/download/v1.0.0/kiln_1.0.0_darwin_arm64.tar.gz
-
-tar xzvf kiln_1.0.0_darwin_arm64.tar.gz
-
-# Make it executable and install
-chmod +x kiln
-sudo mv kiln /usr/local/bin/
-
-# Verify installation
-kiln --version
-```
-
-</TabItem>
-<TabItem label="Windows">
-
-1. Download `kiln-windows-amd64.exe` from the [releases page](https://github.com/thunderbottom/kiln/releases/latest)
-2. Rename it to `kiln.exe`
-3. Place it in a directory that's in your PATH
-4. Open a new command prompt and run `kiln --version`
-
-</TabItem>
-</Tabs>
+<DownloadLinks/>
 
 ## Install from Source
 
