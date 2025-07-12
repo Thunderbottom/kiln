@@ -47,7 +47,12 @@ func NewConfig() *Config {
 
 // Load reads and validates a configuration file
 func Load(path string) (*Config, error) {
-	data, err := os.ReadFile(path)
+	configPath, err := filepath.Abs(path)
+	if err != nil {
+		return nil, err
+	}
+
+	data, err := os.ReadFile(configPath)
 	if err != nil {
 		return nil, err
 	}
@@ -59,6 +64,16 @@ func Load(path string) (*Config, error) {
 
 	if len(config.Recipients) == 0 {
 		return nil, fmt.Errorf("no recipients in configuration")
+	}
+
+	// Resolve relative file paths relative to the configuration directory
+	configDir := filepath.Dir(configPath)
+
+	for name, fileConfig := range config.Files {
+		if !filepath.IsAbs(fileConfig.Filename) {
+			fileConfig.Filename = filepath.Join(configDir, fileConfig.Filename)
+			config.Files[name] = fileConfig
+		}
 	}
 
 	return &config, nil
