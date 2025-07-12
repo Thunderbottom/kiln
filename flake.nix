@@ -1,5 +1,5 @@
 {
-  description = "Kiln - Secure environment variable management tool";
+  description = "kiln - Secure environment variable management tool";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -94,7 +94,7 @@
             '';
 
             meta = with pkgs.lib; {
-              description = "Documentation for Kiln secure environment variable management tool";
+              description = "Documentation for kiln secure environment variable management tool";
               homepage = "https://kiln.sh";
               license = licenses.mit;
             };
@@ -121,7 +121,7 @@
             };
 
             shellHook = ''
-              echo "Kiln development environment"
+              echo "kiln development environment"
               echo "Go version: $(go version)"
               echo "GOPATH: $GOPATH"
               echo ""
@@ -149,7 +149,7 @@
             ];
 
             shellHook = ''
-              echo "Kiln documentation development environment"
+              echo "kiln documentation development environment"
               echo "Node.js version: $(node --version)"
               echo "npm version: $(npm --version)"
               echo ""

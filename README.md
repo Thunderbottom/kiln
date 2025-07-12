@@ -1,5 +1,5 @@
 <div align="center">
-  <img src="./docs/src/assets/logo.svg" alt="Kiln Logo" width="200" height="100">
+  <img src="./docs/src/assets/logo.svg" alt="kiln Logo" width="200" height="100">
 </div>
 
 ---
