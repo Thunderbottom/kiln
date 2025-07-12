@@ -229,6 +229,8 @@ func (c *SetCmd) validateJSONVariables(variables map[string][]byte) error {
 func (c *SetCmd) readValueFromStdin() ([]byte, error) {
 	fmt.Fprintf(os.Stderr, "Enter value for %s: ", c.Name)
 
+	// Convert to int since syscall.Stdin is not int on Windows
+	//nolint:unconvert
 	value, err := term.ReadPassword(int(syscall.Stdin))
 
 	fmt.Println()

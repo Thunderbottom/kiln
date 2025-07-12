@@ -104,11 +104,8 @@ func TestApplyCmd_buildPatterns(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			patterns, err := tt.cmd.buildPatterns()
-			if err != nil {
-				t.Errorf("ApplyCmd.buildPatterns() error = %v", err)
-				return
-			}
+			patterns := tt.cmd.buildPatterns()
+
 			if len(patterns) != tt.expected {
 				t.Errorf("ApplyCmd.buildPatterns() got %d patterns, want %d", len(patterns), tt.expected)
 			}
@@ -193,6 +190,7 @@ func TestApplyCmd_substituteVariables(t *testing.T) {
 
 			if (err != nil) != tt.wantErr {
 				t.Errorf("ApplyCmd.substituteVariables() error = %v, wantErr %v", err, tt.wantErr)
+
 				return
 			}
 
@@ -229,7 +227,8 @@ func TestApplyCmd_Run(t *testing.T) {
 
 	templatePath := filepath.Join(tmpDir, "template.txt")
 	templateContent := "database: ${DATABASE_URL}\napi_key: ${API_KEY}"
-	err = os.WriteFile(templatePath, []byte(templateContent), 0644)
+
+	err = os.WriteFile(templatePath, []byte(templateContent), 0o644)
 	if err != nil {
 		t.Fatalf("Failed to write template file: %v", err)
 	}

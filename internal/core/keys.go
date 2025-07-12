@@ -149,6 +149,8 @@ func GenerateKeyPair() (privateKey []byte, publicKey string, err error) {
 func EncryptPrivateKey(privateKey []byte) ([]byte, error) {
 	fmt.Print("Enter passphrase (leave empty to autogenerate): ")
 
+	// Convert to int since syscall.Stdin is not int on Windows
+	//nolint:unconvert
 	passphrase, err := term.ReadPassword(int(syscall.Stdin))
 
 	fmt.Println()
@@ -186,6 +188,8 @@ func EncryptPrivateKey(privateKey []byte) ([]byte, error) {
 func decryptPrivateKey(encryptedKey string) ([]byte, error) {
 	fmt.Print("Enter passphrase: ")
 
+	// Convert to int since syscall.Stdin is not int on Windows
+	//nolint:unconvert
 	passphrase, err := term.ReadPassword(int(syscall.Stdin))
 
 	fmt.Println()

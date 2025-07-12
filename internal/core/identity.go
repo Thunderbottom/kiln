@@ -154,6 +154,8 @@ func (w *encryptedSSHIdentityWrapper) Unwrap(stanzas []*age.Stanza) ([]byte, err
 		passphraseFunc := func() ([]byte, error) {
 			fmt.Print("Enter passphrase for SSH private key: ")
 
+			// Convert to int since syscall.Stdin is not int on Windows
+			//nolint:unconvert
 			passphrase, err := term.ReadPassword(int(syscall.Stdin))
 
 			fmt.Println()

@@ -9,8 +9,9 @@ import (
 	kerrors "github.com/thunderbottom/kiln/internal/errors"
 )
 
+// ApplyCmd represents the apply command to safely apply variables to a template file.
 type ApplyCmd struct {
-	File           string `short:"f" help:"Environment file from configuration" required:"" placeholder="KILN-ENV-FILE" default:"default"`
+	File           string `short:"f" help:"Environment file from configuration" default:"default"`
 	Output         string `short:"o" help:"Output file path (default: stdout)"`
 	Strict         bool   `help:"Fail if template variables are not found"`
 	LeftDelimiter  string `help:"Left delimiter to use for template variables (default: ${ or $)"`
@@ -44,6 +45,7 @@ func (c *ApplyCmd) Run(rt *Runtime) error {
 
 	if err := c.validate(); err != nil {
 		rt.Logger.Warn().Err(err).Msg("validation failed")
+
 		return err
 	}
 
@@ -63,6 +65,11 @@ func (c *ApplyCmd) Run(rt *Runtime) error {
 	}
 	defer cleanup()
 
+	templateInfo, err := os.Stat(c.Template)
+	if err != nil {
+		return kerrors.FileAccessError("stat", c.Template, err)
+	}
+
 	templateContent, err := os.ReadFile(c.Template)
 	if err != nil {
 		return kerrors.FileAccessError("read", c.Template, err)
@@ -74,15 +81,16 @@ func (c *ApplyCmd) Run(rt *Runtime) error {
 	}
 
 	if c.Output != "" {
-		return os.WriteFile(c.Output, result, 0644)
+		return os.WriteFile(c.Output, result, templateInfo.Mode().Perm())
 	}
 
 	fmt.Print(string(result))
+
 	return nil
 }
 
 // buildPatterns creates regex patterns based on delimiter configuration.
-func (c *ApplyCmd) buildPatterns() ([]*regexp.Regexp, error) {
+func (c *ApplyCmd) buildPatterns() []*regexp.Regexp {
 	var patterns []*regexp.Regexp
 
 	if c.LeftDelimiter != "" && c.RightDelimiter != "" {
@@ -96,17 +104,15 @@ func (c *ApplyCmd) buildPatterns() ([]*regexp.Regexp, error) {
 		patterns = append(patterns, bracesPattern, simplePattern)
 	}
 
-	return patterns, nil
+	return patterns
 }
 
 // substituteVariables performs variable substitution in template content.
 func (c *ApplyCmd) substituteVariables(content []byte, variables map[string][]byte) ([]byte, error) {
-	patterns, err := c.buildPatterns()
-	if err != nil {
-		return nil, err
-	}
+	patterns := c.buildPatterns()
 
 	var missingVars []string
+
 	result := content
 
 	for _, pattern := range patterns {
@@ -124,12 +130,14 @@ func (c *ApplyCmd) substituteVariables(content []byte, variables map[string][]by
 			if c.Strict {
 				missingVars = append(missingVars, varName)
 			}
+
 			return match
 		})
 	}
 
 	if len(missingVars) > 0 {
 		uniqueVars := removeDuplicates(missingVars)
+
 		return nil, kerrors.ValidationError("missing variables", fmt.Sprintf("variables not found: %v", uniqueVars))
 	}
 
@@ -139,11 +147,13 @@ func (c *ApplyCmd) substituteVariables(content []byte, variables map[string][]by
 // removeDuplicates removes duplicate strings from a slice.
 func removeDuplicates(strs []string) []string {
 	keys := make(map[string]bool)
+
 	var result []string
 
 	for _, str := range strs {
 		if !keys[str] {
 			keys[str] = true
+
 			result = append(result, str)
 		}
 	}
