@@ -33,6 +33,7 @@ No servers to maintain, no dependencies, no vendor lock-in. Secrets stay with co
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Usage](#usage)
+- [kiln as a Library](#kiln-as-a-library)
 - [Configuration](#configuration)
 - [Team Collaboration](#team-collaboration)
 - [Contributing](#contributing)
@@ -136,6 +137,68 @@ $ kiln info --verify
 ```
 
 For all available command options, see `kiln [COMMAND] --help`.
+
+## kiln as a Library
+
+kiln can also be used as a Go library for programmatic access to encrypted environment variables in your applications.
+
+<details>
+
+<summary>Example Usage</summary>
+
+```go
+package main
+
+import (
+    "fmt"
+    "log"
+
+    "github.com/thunderbottom/kiln/pkg/kiln"
+)
+
+func main() {
+    // Load configuration
+    cfg, err := kiln.LoadConfig("kiln.toml")
+    if err != nil {
+        log.Fatal(err)
+    }
+
+    // Load identity from key
+    identity, err := kiln.NewIdentityFromKey("~/.kiln/kiln.key")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer identity.Cleanup()
+
+    // Get a single environment variable
+    value, cleanup, err := kiln.GetEnvironmentVar(identity, cfg, "production", "API_KEY")
+    if err != nil {
+        log.Fatal(err)
+    }
+    // Don't forget to clean it up!
+    defer cleanup()
+
+    fmt.Println("API Key:", string(value))
+
+    // Or get all variables
+    vars, cleanup, err := kiln.GetAllEnvironmentVars(identity, cfg, "production")
+    if err != nil {
+        log.Fatal(err)
+    }
+    defer cleanup()
+
+    for key, value := range vars {
+        fmt.Printf("%s=%s\n", key, string(value))
+    }
+}
+```
+
+</details>
+
+**Integrations:**
+- [koanf provider](https://kiln.sh/integrations/) for configuration management
+
+See the [Library Documentation](https://kiln.sh/library/) for complete API reference.
 
 ## Configuration
 
