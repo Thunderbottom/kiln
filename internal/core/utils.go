@@ -1,6 +1,7 @@
 package core
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -31,7 +32,45 @@ func WriteFile(filename string, data []byte) error {
 		return err
 	}
 
-	return os.WriteFile(filename, data, 0o600)
+	tempFile, err := os.CreateTemp(dir, filepath.Base(filename)+".tmp.*")
+	if err != nil {
+		return err
+	}
+
+	tempName := tempFile.Name()
+
+	var renamed bool
+	defer func() {
+		if !renamed {
+			if err := tempFile.Close(); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: close error: %v\n", err)
+			}
+
+			if err := os.Remove(tempName); err != nil {
+				fmt.Fprintf(os.Stderr, "warning: remove error: %v\n", err)
+			}
+		}
+	}()
+
+	if err := tempFile.Chmod(0o600); err != nil {
+		return err
+	}
+
+	if _, err := tempFile.Write(data); err != nil {
+		return err
+	}
+
+	if err := tempFile.Close(); err != nil {
+		return err
+	}
+
+	if err := os.Rename(tempName, filename); err != nil {
+		return err
+	}
+
+	renamed = true
+
+	return nil
 }
 
 // WipeData securely clears sensitive data from a byte slice
