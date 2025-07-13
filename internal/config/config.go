@@ -143,28 +143,38 @@ func (c *Config) ResolveFileAccess(fileName string) ([]string, error) {
 		return nil, fmt.Errorf("file '%s' not found in configuration", fileName)
 	}
 
-	var recipients []string
+	recipientSet := make(map[string]bool)
 
 	for _, accessor := range fileConfig.Access {
+		// If access is a wildcard, add all and break early
 		if accessor == "*" {
 			for _, pubKey := range c.Recipients {
-				recipients = append(recipients, pubKey)
+				recipientSet[pubKey] = true
 			}
 
 			break
 		}
 
+		// Check if accessor is a group
 		if groupMembers, isGroup := c.Groups[accessor]; isGroup {
 			for _, member := range groupMembers {
 				if pubKey, exists := c.Recipients[member]; exists {
-					recipients = append(recipients, pubKey)
+					recipientSet[pubKey] = true
 				}
 			}
-		} else {
-			if pubKey, exists := c.Recipients[accessor]; exists {
-				recipients = append(recipients, pubKey)
-			}
+
+			continue
 		}
+
+		// Check for individual recipients
+		if pubKey, exists := c.Recipients[accessor]; exists {
+			recipientSet[pubKey] = true
+		}
+	}
+
+	recipients := make([]string, 0, len(recipientSet))
+	for pubKey := range recipientSet {
+		recipients = append(recipients, pubKey)
 	}
 
 	if len(recipients) == 0 {

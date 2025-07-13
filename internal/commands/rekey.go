@@ -154,11 +154,11 @@ func (c *RekeyCmd) updateFileAccess(cfg *config.Config) {
 
 // hasFileAccess checks if a recipient already has access to the file
 func (c *RekeyCmd) hasFileAccess(cfg *config.Config, fileConfig config.FileConfig, name string) bool {
-	for _, accessor := range fileConfig.Access {
-		if accessor == name || accessor == "*" {
-			return true
-		}
+	if slices.Contains(fileConfig.Access, name) || slices.Contains(fileConfig.Access, "*") {
+		return true
+	}
 
+	for _, accessor := range fileConfig.Access {
 		if groupMembers, isGroup := cfg.Groups[accessor]; isGroup {
 			return slices.Contains(groupMembers, name)
 		}
