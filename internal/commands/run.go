@@ -133,8 +133,15 @@ func (c *RunCmd) createContext(rt *Runtime) (context.Context, context.CancelFunc
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	if c.Timeout > 0 {
-		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
+		timeoutCtx, timeoutCancel := context.WithTimeout(ctx, c.Timeout)
 		rt.Logger.Debug().Dur("timeout", c.Timeout).Msg("command timeout configured")
+
+		cancelAll := func() {
+			timeoutCancel()
+			cancel()
+		}
+
+		return timeoutCtx, cancelAll
 	}
 
 	return ctx, cancel
