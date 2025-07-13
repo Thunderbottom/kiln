@@ -17,7 +17,7 @@
 
 kiln is a secure environment variable management tool that encrypts your sensitive configuration data using [age encryption](https://age-encryption.org/). It provides a simple, offline-first alternative to centralized secret management services, with role-based access control and support for both age and SSH keys, making it perfect for team collaboration and enterprise environments.
 
-![kiln-demo.gif](./docs/src/assets/kiln-demo.gif)
+![kiln-demo.gif](./docs/public/kiln-demo.gif)
 
 ## Why?
 
