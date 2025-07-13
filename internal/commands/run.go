@@ -113,7 +113,9 @@ func (c *RunCmd) showDryRun(variables map[string][]byte, rt *Runtime) {
 
 // executeCommand runs the specified command with injected environment variables.
 func (c *RunCmd) executeCommand(variables map[string][]byte, rt *Runtime) error {
-	ctx := c.createContext(rt)
+	ctx, cancel := c.createContext(rt)
+	defer cancel()
+
 	cmd := c.buildCommand(ctx, rt)
 	c.setupEnvironment(cmd, variables)
 	c.configureCommand(cmd, rt)
@@ -127,18 +129,15 @@ func (c *RunCmd) executeCommand(variables map[string][]byte, rt *Runtime) error 
 }
 
 // createContext creates a command execution context with signal handling and optional timeout.
-func (c *RunCmd) createContext(rt *Runtime) context.Context {
-	ctxWithCancel, _ := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+func (c *RunCmd) createContext(rt *Runtime) (context.Context, context.CancelFunc) {
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
 
 	if c.Timeout > 0 {
-		var timeoutCancel context.CancelFunc
-		ctxWithCancel, timeoutCancel = context.WithTimeout(ctxWithCancel, c.Timeout)
-		_ = timeoutCancel
-
+		ctx, cancel = context.WithTimeout(ctx, c.Timeout)
 		rt.Logger.Debug().Dur("timeout", c.Timeout).Msg("command timeout configured")
 	}
 
-	return ctxWithCancel
+	return ctx, cancel
 }
 
 // buildCommand creates an exec.Cmd for either shell or direct execution.
