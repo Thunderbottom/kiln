@@ -110,17 +110,13 @@ func (c *EditCmd) createTempFile(content []byte) (*os.File, func(), error) {
 
 	tempFileName := tempFile.Name()
 
-	var cleanupOnce sync.Once
+	cleanupTemp := sync.OnceFunc(func() {
+		_ = tempFile.Close()
 
-	cleanupTemp := func() {
-		cleanupOnce.Do(func() {
-			_ = tempFile.Close()
-
-			if removeErr := os.Remove(tempFileName); removeErr != nil {
-				fmt.Fprintf(os.Stderr, "warning: failed to remove temp file %s: %v\n", tempFileName, removeErr)
-			}
-		})
-	}
+		if removeErr := os.Remove(tempFileName); removeErr != nil {
+			fmt.Fprintf(os.Stderr, "warning: failed to remove temp file %s: %v\n", tempFileName, removeErr)
+		}
+	})
 
 	if err := c.writeAndCloseTempFile(tempFile, content); err != nil {
 		cleanupTemp()
