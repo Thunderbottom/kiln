@@ -1,4 +1,4 @@
-name: Build Check
+name: Go Build Check
 
 on:
     pull_request:
@@ -19,4 +19,4 @@ jobs:
           go-version: "1.24.1"
 
       - name: Prepare Dependencies and Build
-        run: make build
+        run: make build-all
