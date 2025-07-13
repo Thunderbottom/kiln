@@ -46,8 +46,6 @@ func (c *ExportCmd) Run(rt *Runtime) error {
 		return err
 	}
 
-	rt.Logger.Debug().Str("command", "export").Str("file", c.File).Str("format", c.Format).Msg("validation started")
-
 	variables, cleanup, err := core.GetAllEnvVars(identity, cfg, c.File)
 	if err != nil {
 		return err
