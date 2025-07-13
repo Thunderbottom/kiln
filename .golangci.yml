@@ -106,7 +106,6 @@ linters:
 
     # Go vet settings
     govet:
-      check-shadowing: true
       enable-all: true
       disable:
         - fieldalignment # Can be noisy for config structs
@@ -289,12 +288,11 @@ formatters:
   settings:
     # gofumpt settings
     gofumpt:
-      lang-version: "1.24"
       extra-rules: true
     
     # goimports settings
     goimports:
-      local-prefixes: github.com/thunderbottom/kiln
+      local-prefixes: ["github.com/thunderbottom/kiln"]
 
   # Formatter exclusions
   exclusions:
@@ -320,9 +318,6 @@ issues:
 severity:
   # Default severity for all issues
   default: error
-  
-  # Case sensitive severity matching
-  case-sensitive: false
   
   # Severity rules for specific linters
   rules:
